@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, fs, io};
 use std::path::PathBuf;
 use std::process::exit;
 
@@ -9,6 +9,16 @@ use thiserror::Error;
 mod lexer;
 
 
+
+#[derive(Error, Debug)]
+enum ProgramError {
+    #[error(transparent)]
+    ArgumentError(#[from] ArgumentError),
+    #[error(transparent)]
+    FileError(#[from] io::Error),
+    #[error(transparent)]
+    LexerError(#[from] lexer::LexerError)
+}
 
 #[derive(Error, Debug)]
 enum ArgumentError {
@@ -53,10 +63,12 @@ fn parse_args() -> Result<(PathBuf, PathBuf), ArgumentError> {
 
 
 
-fn run_program() -> Result<(), ArgumentError> {
+fn run_program() -> Result<(), ProgramError> {
     let (input_path, output_path) = parse_args()?;
 
-    println!("{:?}, {:?}", input_path, output_path);
+    let input_data = fs::read_to_string(&input_path)?;
+    let toks = lexer::lex(input_data)?;
+
 
     Ok(())
 }
