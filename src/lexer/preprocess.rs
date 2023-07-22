@@ -1,10 +1,30 @@
 
+/**
+ * This enumerates the state for the comment stripping state machine.
+ * Since some of these states are parameterized, this is technically and Pushdown Automata instead of a Finate State Machine.
+ */
 enum WhitespaceStates {
+    /// Normal state, where characters are added to the output stream.
+    /// Checks for any slash characters that could signal the start of a comment.
     Normal,
+    /// Normal state, but a slash was the last character parsed.
+    /// If the next character is a slash, goto SingleLineComment,
+    /// if the next character is an asterisk, goto MultiLineComment(1),
+    /// otherwise, add the character to the output (with a slash to make up for the last character that was skipped).
     Slash,
+    /// Inside a single-line comment. Skip all characters until a newline (\n), which will return us to the Normal state.
     SingleLineComment,
+    /// Inside `n` multiline comments (to track nested comments).
+    /// Will check for slashes and asterisks that may increase or decrease our nesting level.
     MultiLineComment(u32),
+    /// Inside a multiline comment, but the last character was a slash.
+    /// If the next character is an asterisk, return to MultiLineComment with an increased depth,
+    /// otherwise return to MultiLineComment with the same depth.
     MultiLineCommentSlash(u32),
+    /// Inside a multiline comment, but the last character was an asterisk.
+    /// If the next character is a slash, return to MultiLineComment with a decreased depth,
+    /// otherwise return to MultiLineComment with the same depth.
+    /// If the decreased depth is zero, return to the Normal state.
     MultiLineCommentStar(u32)
 }
 
