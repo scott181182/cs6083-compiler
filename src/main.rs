@@ -15,7 +15,9 @@ enum ArgumentError {
     #[error("Expected at least one file argument to compile, but found none!")]
     NoArguments,
     #[error("Expected input file and optional output file argument, but found more than 2 arguments!")]
-    TooManyArguments
+    TooManyArguments,
+    #[error("Input file does not exist")]
+    FileDoesNotExist
 }
 
 fn parse_args() -> Result<(PathBuf, PathBuf), ArgumentError> {
@@ -23,14 +25,18 @@ fn parse_args() -> Result<(PathBuf, PathBuf), ArgumentError> {
     let input_filename_opt = args.next();
     let output_filename_opt = args.next();
 
-    if input_filename_opt.is_none() { return Err(ArgumentError::NoArguments); }
-    if let Some(_) = args.next() { return Err(ArgumentError::TooManyArguments); }
-
-    let input_path = PathBuf::from(input_filename_opt.unwrap());
+    let input_path = match input_filename_opt {
+        None => return Err(ArgumentError::NoArguments),
+        Some(input_filename) => PathBuf::from(input_filename)
+    };
+    if args.len() > 0 { return Err(ArgumentError::TooManyArguments); }
+    if !input_path.is_file() { return Err(ArgumentError::FileDoesNotExist); }
+    
     let output_path = match output_filename_opt {
         Some(output_filename) => {
             let mut output_path = PathBuf::from(output_filename);
             if output_path.is_dir() {
+                // This can be unwrapped, since we checked that `input_path` is a file earlier.
                 output_path.push(input_path.file_name().unwrap());
             }
             output_path
