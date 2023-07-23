@@ -68,7 +68,7 @@ fn run_program() -> Result<(), ProgramError> {
 
     let input_data = fs::read_to_string(&input_path)?;
     let toks = lexer::lex(input_data)?;
-
+    println!("{:?}", toks);
 
     Ok(())
 }

@@ -17,6 +17,7 @@ pub enum LexerError {
 //     pub line_col: u64,
 // }
 
+#[derive(Debug)]
 pub enum Token {
     // Keywords
     Program,
@@ -111,7 +112,7 @@ fn finish_partial(content: &str, hint: &TokenHint) -> Token {
         "integer" => Token::Integer,
         "float" => Token::Float,
         "string" => Token::String,
-        "boolean" => Token::Boolean,
+        "bool" => Token::Boolean,
         "if" => Token::If,
         "then" => Token::Then,
         "else" => Token::Else,
