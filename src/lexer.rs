@@ -69,9 +69,58 @@ pub enum Token {
     StringLiteral(String)
 }
 
-#[derive(Debug, PartialEq)]
-enum TokenHint {
-    Identifier, Numeric, StringLiteral, Symbol, None
+impl Token {
+    pub fn from_identifier(value: String) -> Self {
+        match value.as_str() {
+            "program" => Token::Program,
+            "is" => Token::Is,
+            "begin" => Token::Begin,
+            "end" => Token::End,
+            "global" => Token::Global,
+            "procedure" => Token::Procedure,
+            "variable" => Token::Variable,
+            "integer" => Token::Integer,
+            "float" => Token::Float,
+            "string" => Token::String,
+            "bool" => Token::Boolean,
+            "if" => Token::If,
+            "then" => Token::Then,
+            "else" => Token::Else,
+            "for" => Token::For,
+            "return" => Token::Return,
+            "not" => Token::Not,
+            "true" => Token::True,
+            "false" => Token::False,
+            _ => Token::Identifier(value)
+        }
+    }
+
+    pub fn from_symbol(value: &str) -> Result<Self, LexerError> {
+        match value {
+            "."  => Ok(Token::Period),
+            ";"  => Ok(Token::Semicolon),
+            ":"  => Ok(Token::Colon),
+            ","  => Ok(Token::Comma),
+            "("  => Ok(Token::LeftParen),
+            ")"  => Ok(Token::RightParen),
+            "["  => Ok(Token::LeftBracket),
+            "]"  => Ok(Token::RightBracket),
+            ":=" => Ok(Token::Assign),
+            "&"  => Ok(Token::Ampersand),
+            "|"  => Ok(Token::Bar),
+            "+"  => Ok(Token::Plus),
+            "-"  => Ok(Token::Minus),
+            "<"  => Ok(Token::LessThan),
+            "<=" => Ok(Token::LessThanEq),
+            ">"  => Ok(Token::GreaterThan),
+            ">=" => Ok(Token::GreaterThanEq),
+            "==" => Ok(Token::DoubleEqual),
+            "!=" => Ok(Token::BangEqual),
+            "*"  => Ok(Token::Asterisk),
+            "/"  => Ok(Token::Slash),
+            _ => Err(LexerError::UnknownSymbol(value.to_owned()))
+        }
+    }
 }
 
 enum PartialToken {
@@ -100,63 +149,6 @@ impl TryFrom<char> for PartialToken {
 
 const MONO_SYMBOLS: &'static str = ".;,()[]&|+-*/";
 
-fn finish_partial(content: &str, hint: &TokenHint) -> Token {
-    match content.to_lowercase().as_str() {
-        "program" => Token::Program,
-        "is" => Token::Is,
-        "begin" => Token::Begin,
-        "end" => Token::End,
-        "global" => Token::Global,
-        "procedure" => Token::Procedure,
-        "variable" => Token::Variable,
-        "integer" => Token::Integer,
-        "float" => Token::Float,
-        "string" => Token::String,
-        "bool" => Token::Boolean,
-        "if" => Token::If,
-        "then" => Token::Then,
-        "else" => Token::Else,
-        "for" => Token::For,
-        "return" => Token::Return,
-        "not" => Token::Not,
-        "true" => Token::True,
-        "false" => Token::False,
-
-        "." => Token::Period,
-        ";" => Token::Semicolon,
-        ":" => Token::Colon,
-        "," => Token::Comma,
-        "(" => Token::LeftParen,
-        ")" => Token::RightParen,
-        "[" => Token::LeftBracket,
-        "]" => Token::RightBracket,
-        ":=" => Token::Assign,
-        "&" => Token::Ampersand,
-        "|" => Token::Bar,
-        "+" => Token::Plus,
-        "-" => Token::Minus,
-        "<" => Token::LessThan,
-        "<=" => Token::LessThanEq,
-        ">" => Token::GreaterThan,
-        ">=" => Token::GreaterThanEq,
-        "==" => Token::DoubleEqual,
-        "!=" => Token::BangEqual,
-        "*" => Token::Asterisk,
-        "/" => Token::Slash,
-
-        _ => {
-            if content.starts_with('"') && content.ends_with('"') {
-                return Token::StringLiteral(content.replace("\"", ""));
-            }
-            match hint {
-                TokenHint::Identifier => Token::Identifier(content.to_owned()),
-                TokenHint::Numeric => Token::NumberLiteral(content.to_owned()),
-                _ => panic!("Wow, an unexpected token!")
-            }
-        }
-    }
-}
-
 
 
 pub fn lex(raw_content: String) -> Result<Vec<Token>, LexerError> {
@@ -164,21 +156,20 @@ pub fn lex(raw_content: String) -> Result<Vec<Token>, LexerError> {
 
     let mut toks = Vec::new();
     let mut partial = PartialToken::None;
-    let mut hint = TokenHint::None;
 
     for c in content.chars() {
         partial = match (partial, c) {
             (PartialToken::None, ' ' | '\t' | '\n') => PartialToken::None,
             (PartialToken::Identifier(p), ' ' | '\t' | '\n') => {
-                toks.push(finish_partial(&p, &TokenHint::Identifier));
+                toks.push(Token::from_identifier(p));
                 PartialToken::None
             },
             (PartialToken::NumberLiteral(p), ' ' | '\t' | '\n') => {
-                toks.push(finish_partial(&p, &TokenHint::Numeric));
+                toks.push(Token::NumberLiteral(p));
                 PartialToken::None
             },
             (PartialToken::Symbol(p), ' ' | '\t' | '\n') => {
-                toks.push(finish_partial(&p, &TokenHint::Symbol));
+                toks.push(Token::from_symbol(&p)?);
                 PartialToken::None
             },
 
@@ -190,7 +181,7 @@ pub fn lex(raw_content: String) -> Result<Vec<Token>, LexerError> {
                 PartialToken::Identifier(p)
             },
             (PartialToken::Identifier(p), _) => {
-                toks.push(finish_partial(&p, &TokenHint::Identifier));
+                toks.push(Token::from_identifier(p));
                 PartialToken::try_from(c)?
             },
 
@@ -201,7 +192,7 @@ pub fn lex(raw_content: String) -> Result<Vec<Token>, LexerError> {
             (PartialToken::NumberLiteral(mut p), '.') => {
                 if p.contains(".") {
                     // This number literal already has a decimal point, so assume this is another symbol
-                    toks.push(finish_partial(&p, &TokenHint::Numeric));
+                    toks.push(Token::NumberLiteral(p));
                     PartialToken::try_from(c)?
                 } else {
                     p.push(c);
@@ -209,7 +200,7 @@ pub fn lex(raw_content: String) -> Result<Vec<Token>, LexerError> {
                 }
             },
             (PartialToken::NumberLiteral(p), _) => {
-                toks.push(finish_partial(&p, &TokenHint::Identifier));
+                toks.push(Token::NumberLiteral(p));
                 PartialToken::try_from(c)?
             },
 
@@ -224,7 +215,7 @@ pub fn lex(raw_content: String) -> Result<Vec<Token>, LexerError> {
 
             (PartialToken::Symbol(mut p), _) => {
                 if MONO_SYMBOLS.contains(&p) {
-                    toks.push(finish_partial(&p, &TokenHint::Symbol));
+                    toks.push(Token::from_symbol(&p)?);
                     PartialToken::try_from(c)?
                 } else {
                     if p == "<" && c == '=' {
