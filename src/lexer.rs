@@ -12,10 +12,7 @@ pub enum LexerError {
     UnknownSymbol(String)
 }
 
-// pub struct Location {
-//     pub line_no: u64,
-//     pub line_col: u64,
-// }
+
 
 #[derive(Debug)]
 pub enum Token {
