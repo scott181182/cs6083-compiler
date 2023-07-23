@@ -16,7 +16,7 @@ pub enum LexerError {
 
 
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     // Keywords
     Program,
@@ -67,8 +67,6 @@ pub enum Token {
     NumberLiteral(String),
     StringLiteral(String)
 }
-
-pub type TokenStream = VecDeque<Token>;
 
 impl Token {
     pub fn from_identifier(value: String) -> Self {
@@ -152,7 +150,7 @@ const MONO_SYMBOLS: &'static str = ".;,()[]&|+-*/";
 
 
 
-pub fn lex(raw_content: String) -> Result<TokenStream, LexerError> {
+pub fn lex(raw_content: String) -> Result<VecDeque<Token>, LexerError> {
     let content = preprocess::strip_comments(raw_content);
 
     let mut toks = VecDeque::new();

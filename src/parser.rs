@@ -1,6 +1,9 @@
-use crate::lexer::TokenStream;
-pub use util::{ParserError, ParseTokens};
+use std::collections::VecDeque;
+
+use crate::lexer::Token;
+pub use self::util::{ParserError, ParseTokens, TokenStream};
 pub use program::*;
+
 
 
 mod declaration;
@@ -14,6 +17,7 @@ mod util;
 
 
 
-pub fn parse(mut toks: TokenStream) -> Result<ProgramNode, ParserError> {
-    ProgramNode::parse(&mut toks)
+pub fn parse(mut toks: VecDeque<Token>) -> Result<ProgramNode, ParserError> {
+    let mut stream = TokenStream::new(toks);
+    ProgramNode::parse(&mut stream)
 }

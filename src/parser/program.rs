@@ -1,8 +1,8 @@
-use crate::lexer::{TokenStream, Token};
+use crate::lexer::Token;
 
 use super::declaration::DeclarationNode;
 use super::statement::StatementNode;
-use super::util::{ParseTokens, ParserError, expect_token};
+use super::util::{ParseTokens, ParserError, TokenStream};
 
 
 
@@ -15,7 +15,7 @@ impl ParseTokens for ProgramNode {
     fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
         let header = ProgramHeaderNode::parse(toks)?;
         let body = ProgramBodyNode::parse(toks)?;
-        expect_token(toks, Token::Period)?;
+        toks.consume_expected(Token::Period)?;
 
         if let Some(next) = toks.pop_front() {
             return Err(ParserError::ExpectedEndOfFile(next))
@@ -33,13 +33,9 @@ pub struct ProgramHeaderNode {
 }
 impl ParseTokens for ProgramHeaderNode {
     fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
-        expect_token(toks, Token::Program)?;
-        let ident = match toks.pop_front() {
-            Some(Token::Identifier(name)) => name,
-            Some(tok) => return Err(ParserError::UnexpectedToken("identifier".to_owned(), tok)),
-            _ => return Err(ParserError::UnexpectedEndOfFile("identifier".to_owned()))
-        };
-        expect_token(toks, Token::Is)?;
+        toks.consume_expected(Token::Program)?;
+        let ident = toks.consume_identifier()?;
+        toks.consume_expected(Token::Is)?;
         
         Ok(ProgramHeaderNode{ ident })
     }
@@ -64,10 +60,10 @@ impl ParseTokens for ProgramBodyNode {
             } else if let None = next {
                 return Err(ParserError::UnexpectedEndOfFile("begin or declaration".to_owned()));
             } else {
-                // declarations.push(DeclarationNode::parse(toks));
+                declarations.push(DeclarationNode::parse(toks)?);
             }
         }
-        expect_token(toks, Token::Begin)?;
+        toks.consume_expected(Token::Begin)?;
         loop {
             let next = toks.front();
             if let Some(Token::End) = next {
@@ -75,11 +71,11 @@ impl ParseTokens for ProgramBodyNode {
             } else if let None = next {
                 return Err(ParserError::UnexpectedEndOfFile("begin or declaration".to_owned()));
             } else {
-                // declarations.push(StatementNode::parse(toks));
+                declarations.push(StatementNode::parse(toks)?);
             }
         }
-        expect_token(toks, Token::End)?;
-        expect_token(toks, Token::Program)?;
+        toks.consume_expected(Token::End)?;
+        toks.consume_expected(Token::Program)?;
 
         Ok(ProgramBodyNode{ declarations, statements })
     }
