@@ -1,4 +1,33 @@
 
+
+
+pub struct AnnotatedChar(pub char, pub Location);
+
+pub struct Location {
+    pub line_no: u64,
+    pub line_col: u64,
+}
+
+pub fn annotate_input(content: String) -> impl Iterator<Item=AnnotatedChar> {
+    let mut line_no = 0u64;
+    let mut line_col = 0u64;
+
+    content.chars().map(move |c| {
+        match c {
+            '\n' => {
+                let anno = AnnotatedChar(c, Location{line_no, line_col: line_col + 1});
+                line_no += 1;
+                line_col = 0;
+                anno
+            }
+            _ => {
+                line_col += 1;
+                AnnotatedChar(c, Location{line_no, line_col})
+            }
+        }
+    })
+}
+
 /**
  * This enumerates the state for the comment stripping state machine.
  * Since some of these states are parameterized, this is technically and Pushdown Automata instead of a Finate State Machine.
