@@ -8,7 +8,8 @@ mod preprocess;
 
 #[derive(Error, Debug)]
 pub enum LexerError {
-
+    #[error("Unknown symbol: {0}")]
+    UnknownSymbol(String)
 }
 
 // pub struct Location {
@@ -67,9 +68,36 @@ pub enum Token {
     StringLiteral(String)
 }
 
+#[derive(Debug, PartialEq)]
 enum TokenHint {
-    Identifier, NumberLiteral, StringLiteral, Symbol, Keyword, None
+    Identifier, Numeric, StringLiteral, Symbol, None
 }
+
+enum PartialToken {
+    None,
+    Identifier(String),
+    NumberLiteral(String),
+    StringLiteral(String),
+    Symbol(String)
+}
+
+impl TryFrom<char> for PartialToken {
+    type Error = LexerError;
+
+    fn try_from(value: char) -> Result<Self, Self::Error> {
+        match value {
+            cin if cin.is_alphabetic() => Ok(PartialToken::Identifier(cin.to_string())),
+            cin if cin.is_numeric() => Ok(PartialToken::NumberLiteral(cin.to_string())),
+            '"' => Ok(PartialToken::StringLiteral(String::new())),
+            // TODO: check against actual list of symbols.
+            cin => Ok(PartialToken::Symbol(cin.to_string())),
+        }
+    }
+}
+
+
+
+const MONO_SYMBOLS: &'static str = ".;,()[]&|+-*/";
 
 fn finish_partial(content: &str, hint: &TokenHint) -> Token {
     match content.to_lowercase().as_str() {
@@ -121,41 +149,109 @@ fn finish_partial(content: &str, hint: &TokenHint) -> Token {
             }
             match hint {
                 TokenHint::Identifier => Token::Identifier(content.to_owned()),
-                TokenHint::NumberLiteral => Token::NumberLiteral(content.to_owned()),
+                TokenHint::Numeric => Token::NumberLiteral(content.to_owned()),
                 _ => panic!("Wow, an unexpected token!")
             }
         }
     }
 }
 
-macro_rules! process_token {
-    ($toks: ident, $partial: ident, $hint: ident) => {
-        $toks.push(finish_partial(&$partial, &$hint));
-        $partial.clear();
-        continue
-    };
-}
+
 
 pub fn lex(raw_content: String) -> Result<Vec<Token>, LexerError> {
     let content = preprocess::strip_comments(raw_content);
 
-    println!("{}", content);
-
     let mut toks = Vec::new();
-    let mut partial = String::new();
+    let mut partial = PartialToken::None;
     let mut hint = TokenHint::None;
 
     for c in content.chars() {
-        if c == ' ' || c == '\t' || c == '\n' {
-            process_token!(toks, partial, hint);
-        }
+        partial = match (partial, c) {
+            (PartialToken::None, ' ' | '\t' | '\n') => PartialToken::None,
+            (PartialToken::Identifier(p), ' ' | '\t' | '\n') => {
+                toks.push(finish_partial(&p, &TokenHint::Identifier));
+                PartialToken::None
+            },
+            (PartialToken::NumberLiteral(p), ' ' | '\t' | '\n') => {
+                toks.push(finish_partial(&p, &TokenHint::Numeric));
+                PartialToken::None
+            },
+            (PartialToken::Symbol(p), ' ' | '\t' | '\n') => {
+                toks.push(finish_partial(&p, &TokenHint::Symbol));
+                PartialToken::None
+            },
 
-        match &partial {
-            _ => {}
-        }
 
-        if c.is_alphanumeric() {
-            partial.push(c);
+            (PartialToken::None, cin) => PartialToken::try_from(cin)?,
+
+            (PartialToken::Identifier(mut p), cin) if cin.is_alphanumeric() => {
+                p.push(cin);
+                PartialToken::Identifier(p)
+            },
+            (PartialToken::Identifier(p), _) => {
+                toks.push(finish_partial(&p, &TokenHint::Identifier));
+                PartialToken::try_from(c)?
+            },
+
+            (PartialToken::NumberLiteral(mut p), cin) if cin.is_numeric() => {
+                p.push(cin);
+                PartialToken::NumberLiteral(p)
+            },
+            (PartialToken::NumberLiteral(mut p), '.') => {
+                if p.contains(".") {
+                    // This number literal already has a decimal point, so assume this is another symbol
+                    toks.push(finish_partial(&p, &TokenHint::Numeric));
+                    PartialToken::try_from(c)?
+                } else {
+                    p.push(c);
+                    PartialToken::NumberLiteral(p)
+                }
+            },
+            (PartialToken::NumberLiteral(p), _) => {
+                toks.push(finish_partial(&p, &TokenHint::Identifier));
+                PartialToken::try_from(c)?
+            },
+
+            (PartialToken::StringLiteral(p), '"') => {
+                toks.push(Token::StringLiteral(p));
+                PartialToken::None
+            },
+            (PartialToken::StringLiteral(mut p), _) => {
+                p.push(c);
+                PartialToken::StringLiteral(p)
+            },
+
+            (PartialToken::Symbol(mut p), _) => {
+                if MONO_SYMBOLS.contains(&p) {
+                    toks.push(finish_partial(&p, &TokenHint::Symbol));
+                    PartialToken::try_from(c)?
+                } else {
+                    if p == "<" && c == '=' {
+                        toks.push(Token::LessThanEq);
+                        PartialToken::None
+                    } else if p == ">" && c == '=' {
+                        toks.push(Token::GreaterThanEq);
+                        PartialToken::None
+                    } else if p == ":" {
+                        if c == '=' {
+                            toks.push(Token::Assign);
+                            PartialToken::None
+                        } else {
+                            toks.push(Token::Colon);
+                            PartialToken::try_from(c)?
+                        }
+                    } else if p == "=" && c == '=' {
+                        toks.push(Token::DoubleEqual);
+                        PartialToken::None
+                    } else if p == "!" && c == '=' {
+                        toks.push(Token::BangEqual);
+                        PartialToken::None
+                    } else {
+                        p.push(c);
+                        return Err(LexerError::UnknownSymbol(p))
+                    }
+                }
+            }
         }
     }
 
