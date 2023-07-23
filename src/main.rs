@@ -2,22 +2,26 @@ use std::{env, fs, io};
 use std::path::PathBuf;
 use std::process::exit;
 
+use parser::parse;
 use thiserror::Error;
 
 
 
 mod lexer;
+mod parser;
 
 
 
 #[derive(Error, Debug)]
 enum ProgramError {
     #[error(transparent)]
-    ArgumentError(#[from] ArgumentError),
+    Argument(#[from] ArgumentError),
     #[error(transparent)]
-    FileError(#[from] io::Error),
+    File(#[from] io::Error),
     #[error(transparent)]
-    LexerError(#[from] lexer::LexerError)
+    Lexer(#[from] lexer::LexerError),
+    #[error(transparent)]
+    Parser(#[from] parser::util::ParserError)
 }
 
 #[derive(Error, Debug)]
@@ -68,7 +72,9 @@ fn run_program() -> Result<(), ProgramError> {
 
     let input_data = fs::read_to_string(&input_path)?;
     let toks = lexer::lex(input_data)?;
-    println!("{:?}", toks);
+    // println!("{:?}", toks);
+    let program = parse(toks)?;
+    println!("{:?}", program);
 
     Ok(())
 }
