@@ -1,5 +1,5 @@
 use crate::lexer::TokenStream;
-use util::ParserError;
+pub use util::ParserError;
 
 use self::{nodes::ProgramNode, parsing::ParseTokens};
 

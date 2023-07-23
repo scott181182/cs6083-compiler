@@ -21,7 +21,7 @@ enum ProgramError {
     #[error(transparent)]
     Lexer(#[from] lexer::LexerError),
     #[error(transparent)]
-    Parser(#[from] parser::util::ParserError)
+    Parser(#[from] parser::ParserError)
 }
 
 #[derive(Error, Debug)]
