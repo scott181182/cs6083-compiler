@@ -8,7 +8,7 @@ mod preprocess;
 
 #[derive(Error, Debug)]
 pub enum LexerError {
-    #[error("Unknown symbol: {0}")]
+    #[error("Unknown symbol code(s): {:?}", .0.bytes().collect::<Vec<u8>>())]
     UnknownSymbol(String)
 }
 
@@ -173,7 +173,7 @@ pub fn lex(raw_content: String) -> Result<Vec<Token>, LexerError> {
 
             (PartialToken::None, cin) => PartialToken::try_from(cin)?,
 
-            (PartialToken::Identifier(mut p), cin) if cin.is_alphanumeric() => {
+            (PartialToken::Identifier(mut p), cin) if cin.is_alphanumeric() || cin == '_' => {
                 p.push(cin);
                 PartialToken::Identifier(p)
             },
