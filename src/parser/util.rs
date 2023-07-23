@@ -16,6 +16,10 @@ pub enum ParserError {
 
 
 
+pub trait ParseTokens: Sized {
+    fn parse(toks: &mut TokenStream) -> Result<Self, ParserError>;
+}
+
 pub fn expect_token(toks: &mut TokenStream, expected: Token) -> Result<(), ParserError> {
     if let Some(tok) = toks.pop_front() {
         if tok != expected {

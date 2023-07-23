@@ -1,17 +1,16 @@
+use crate::lexer::{TokenStream, Token};
+
+use super::declaration::DeclarationNode;
+use super::statement::StatementNode;
+use super::util::{ParseTokens, ParserError, expect_token};
 
 
 
-use crate::lexer::{Token, TokenStream};
-use crate::parser::util::{ParserError, expect_token};
-use crate::parser::nodes::*;
-
-
-
-pub trait ParseTokens: Sized {
-    fn parse(toks: &mut TokenStream) -> Result<Self, ParserError>;
+#[derive(Debug)]
+pub struct ProgramNode {
+    pub header: ProgramHeaderNode,
+    pub body: ProgramBodyNode
 }
-
-
 impl ParseTokens for ProgramNode {
     fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
         let header = ProgramHeaderNode::parse(toks)?;
@@ -25,6 +24,13 @@ impl ParseTokens for ProgramNode {
         Ok(ProgramNode{ header, body })
     }
 }
+
+
+
+#[derive(Debug)]
+pub struct ProgramHeaderNode {
+    pub ident: String
+}
 impl ParseTokens for ProgramHeaderNode {
     fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
         expect_token(toks, Token::Program)?;
@@ -37,6 +43,14 @@ impl ParseTokens for ProgramHeaderNode {
         
         Ok(ProgramHeaderNode{ ident })
     }
+}
+
+
+
+#[derive(Debug)]
+pub struct ProgramBodyNode {
+    pub declarations: Vec<DeclarationNode>,
+    pub statements: Vec<StatementNode>
 }
 impl ParseTokens for ProgramBodyNode {
     fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
