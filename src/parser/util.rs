@@ -62,3 +62,6 @@ impl TokenStream {
 pub trait ParseTokens: Sized {
     fn parse(toks: &mut TokenStream) -> Result<Self, ParserError>;
 }
+pub trait CanParseTokens {
+    fn can_parse(toks: &TokenStream) -> bool;
+}

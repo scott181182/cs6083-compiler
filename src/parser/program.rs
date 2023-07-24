@@ -61,6 +61,7 @@ impl ParseTokens for ProgramBodyNode {
                 return Err(ParserError::UnexpectedEndOfFile("begin or declaration".to_owned()));
             } else {
                 declarations.push(DeclarationNode::parse(toks)?);
+                toks.consume_expected(Token::Semicolon)?;
             }
         }
         toks.consume_expected(Token::Begin)?;
@@ -72,6 +73,7 @@ impl ParseTokens for ProgramBodyNode {
                 return Err(ParserError::UnexpectedEndOfFile("begin or declaration".to_owned()));
             } else {
                 declarations.push(StatementNode::parse(toks)?);
+                toks.consume_expected(Token::Semicolon)?;
             }
         }
         toks.consume_expected(Token::End)?;
