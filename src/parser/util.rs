@@ -24,9 +24,8 @@ impl TokenStream {
         TokenStream { tokens }
     }
 
-    pub fn pop_front(&mut self) -> Option<Token> { self.pop_front() }
-    pub fn front(&self) -> Option<&Token> { self.front() }
-    pub fn is_empty(&self) -> bool { self.is_empty() }
+    pub fn pop_front(&mut self) -> Option<Token> { self.tokens.pop_front() }
+    pub fn front(&self) -> Option<&Token> { self.tokens.front() }
 
     pub fn consume_identifier(&mut self) -> Result<String, ParserError> {
         match self.pop_front() {

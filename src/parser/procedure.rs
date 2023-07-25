@@ -50,7 +50,7 @@ impl ParseTokens for ParameterListNode {
         parameters.push(ParameterNode::parse(toks)?);
 
         while let Some(&Token::Comma) = toks.front() {
-            toks.consume_expected(Token::Comma);
+            toks.consume_expected(Token::Comma)?;
             parameters.push(ParameterNode::parse(toks)?);
         }
 
@@ -101,7 +101,7 @@ impl ParseTokens for ProcedureBodyNode {
             } else if let None = next {
                 return Err(ParserError::UnexpectedEndOfFile("begin or declaration".to_owned()));
             } else {
-                declarations.push(StatementNode::parse(toks)?);
+                statements.push(StatementNode::parse(toks)?);
                 toks.consume_expected(Token::Semicolon)?;
             }
         }
@@ -152,7 +152,7 @@ impl ParseTokens for ArgumentListNode {
         arguments.push(ExpressionNode::parse(toks)?);
 
         while let Some(&Token::Comma) = toks.front() {
-            toks.consume_expected(Token::Comma);
+            toks.consume_expected(Token::Comma)?;
             arguments.push(ExpressionNode::parse(toks)?);
         }
 

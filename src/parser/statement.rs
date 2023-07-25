@@ -80,8 +80,8 @@ pub struct IfStatementNode {
 }
 impl ParseTokens for IfStatementNode {
     fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
-        let then_block = Vec::new();
-        let else_block = Vec::new();
+        let mut then_block = Vec::new();
+        let mut else_block = Vec::new();
 
         toks.consume_expected(Token::If)?;
         toks.consume_expected(Token::LeftParen)?;
@@ -124,6 +124,40 @@ pub struct LoopStatementNode {
     pub cond: ExpressionNode,
     pub block: Vec<StatementNode>
 }
+impl ParseTokens for LoopStatementNode {
+    fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
+        let mut block = Vec::new();
+
+        toks.consume_expected(Token::For)?;
+        toks.consume_expected(Token::LeftParen)?;
+        let assign = AssignmentStatementNode::parse(toks)?;
+        toks.consume_expected(Token::Semicolon)?;
+        let cond = ExpressionNode::parse(toks)?;
+        toks.consume_expected(Token::RightParen)?;
+
+        // Parse the body
+        while StatementNode::can_parse(toks) {
+            block.push(StatementNode::parse(toks)?);
+            toks.consume_expected(Token::Semicolon)?;
+        }
+
+        toks.consume_expected(Token::End)?;
+        toks.consume_expected(Token::For)?;
+
+        Ok(LoopStatementNode { assign, cond, block })
+    }
+}
+
+
 
 #[derive(Debug)]
 pub struct ReturnStatementNode(pub ExpressionNode);
+
+impl ParseTokens for ReturnStatementNode {
+    fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
+        toks.consume_expected(Token::Return)?;
+        let expr = ExpressionNode::parse(toks)?;
+
+        Ok(ReturnStatementNode(expr))
+    }
+}

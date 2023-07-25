@@ -64,7 +64,7 @@ impl ParseTokens for NameNode {
         if toks.consume_if(&Token::LeftBracket) {
             let expr = ExpressionNode::parse(toks)?;
             toks.consume_expected(Token::RightBracket)?;
-            Ok(NameNode{ ident, expr: Some(expr) })
+            Ok(NameNode{ ident, expr: Some(Box::new(expr)) })
         } else {
             Ok(NameNode{ ident, expr: None })
         }

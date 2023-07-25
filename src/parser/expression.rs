@@ -1,5 +1,8 @@
+use crate::lexer::Token;
+
 use super::procedure::ProcedureCallNode;
 use super::misc::{NameNode, NumberNode};
+use super::util::{ParserError, ParseTokens, TokenStream, CanParseTokens};
 
 
 
@@ -10,6 +13,21 @@ pub enum ExpressionNode {
     Not(ArithmeticNode),
     Nop(ArithmeticNode)
 }
+impl ParseTokens for ExpressionNode {
+    fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
+        // match toks.front() {
+        //     Some(Token::Identifier(_)) => Ok(StatementNode::Assignment(AssignmentStatementNode::parse(toks)?)),
+        //     Some(Token::If) => Ok(StatementNode::If(IfStatementNode::parse(toks)?)),
+        //     Some(Token::For) => Ok(StatementNode::Loop(LoopStatementNode::parse(toks)?)),
+        //     Some(Token::Return) => Ok(StatementNode::Return(ReturnStatementNode::parse(toks)?)),
+        //     Some(tok) => Err(ParserError::UnexpectedToken("statement".to_owned(), tok.clone())),
+        //     None => Err(ParserError::UnexpectedEndOfFile("statement".to_owned()))
+        // }
+        Err(ParserError::ExpectedEndOfFile(Token::Period))
+    }
+}
+
+
 
 #[derive(Debug)]
 pub enum ArithmeticNode {

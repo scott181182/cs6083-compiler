@@ -17,7 +17,7 @@ mod util;
 
 
 
-pub fn parse(mut toks: VecDeque<Token>) -> Result<ProgramNode, ParserError> {
+pub fn parse(toks: VecDeque<Token>) -> Result<ProgramNode, ParserError> {
     let mut stream = TokenStream::new(toks);
     ProgramNode::parse(&mut stream)
 }

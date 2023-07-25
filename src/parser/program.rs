@@ -72,7 +72,7 @@ impl ParseTokens for ProgramBodyNode {
             } else if let None = next {
                 return Err(ParserError::UnexpectedEndOfFile("begin or declaration".to_owned()));
             } else {
-                declarations.push(StatementNode::parse(toks)?);
+                statements.push(StatementNode::parse(toks)?);
                 toks.consume_expected(Token::Semicolon)?;
             }
         }
