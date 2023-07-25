@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use thiserror::Error;
 
 
@@ -8,13 +10,13 @@ mod preprocess;
 
 #[derive(Error, Debug)]
 pub enum LexerError {
-    #[error("Unknown symbol: {0}")]
+    #[error("Unknown symbol code(s): {:?}", .0.bytes().collect::<Vec<u8>>())]
     UnknownSymbol(String)
 }
 
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     // Keywords
     Program,
@@ -148,37 +150,37 @@ const MONO_SYMBOLS: &'static str = ".;,()[]&|+-*/";
 
 
 
-pub fn lex(raw_content: String) -> Result<Vec<Token>, LexerError> {
+pub fn lex(raw_content: String) -> Result<VecDeque<Token>, LexerError> {
     let content = preprocess::strip_comments(raw_content);
 
-    let mut toks = Vec::new();
+    let mut toks = VecDeque::new();
     let mut partial = PartialToken::None;
 
     for c in content.chars() {
         partial = match (partial, c) {
             (PartialToken::None, ' ' | '\t' | '\n') => PartialToken::None,
             (PartialToken::Identifier(p), ' ' | '\t' | '\n') => {
-                toks.push(Token::from_identifier(p));
+                toks.push_back(Token::from_identifier(p));
                 PartialToken::None
             },
             (PartialToken::NumberLiteral(p), ' ' | '\t' | '\n') => {
-                toks.push(Token::NumberLiteral(p));
+                toks.push_back(Token::NumberLiteral(p));
                 PartialToken::None
             },
             (PartialToken::Symbol(p), ' ' | '\t' | '\n') => {
-                toks.push(Token::from_symbol(&p)?);
+                toks.push_back(Token::from_symbol(&p)?);
                 PartialToken::None
             },
 
 
             (PartialToken::None, cin) => PartialToken::try_from(cin)?,
 
-            (PartialToken::Identifier(mut p), cin) if cin.is_alphanumeric() => {
+            (PartialToken::Identifier(mut p), cin) if cin.is_alphanumeric() || cin == '_' => {
                 p.push(cin);
                 PartialToken::Identifier(p)
             },
             (PartialToken::Identifier(p), _) => {
-                toks.push(Token::from_identifier(p));
+                toks.push_back(Token::from_identifier(p));
                 PartialToken::try_from(c)?
             },
 
@@ -189,7 +191,7 @@ pub fn lex(raw_content: String) -> Result<Vec<Token>, LexerError> {
             (PartialToken::NumberLiteral(mut p), '.') => {
                 if p.contains(".") {
                     // This number literal already has a decimal point, so assume this is another symbol
-                    toks.push(Token::NumberLiteral(p));
+                    toks.push_back(Token::NumberLiteral(p));
                     PartialToken::try_from(c)?
                 } else {
                     p.push(c);
@@ -197,12 +199,12 @@ pub fn lex(raw_content: String) -> Result<Vec<Token>, LexerError> {
                 }
             },
             (PartialToken::NumberLiteral(p), _) => {
-                toks.push(Token::NumberLiteral(p));
+                toks.push_back(Token::NumberLiteral(p));
                 PartialToken::try_from(c)?
             },
 
             (PartialToken::StringLiteral(p), '"') => {
-                toks.push(Token::StringLiteral(p));
+                toks.push_back(Token::StringLiteral(p));
                 PartialToken::None
             },
             (PartialToken::StringLiteral(mut p), _) => {
@@ -212,28 +214,28 @@ pub fn lex(raw_content: String) -> Result<Vec<Token>, LexerError> {
 
             (PartialToken::Symbol(mut p), _) => {
                 if MONO_SYMBOLS.contains(&p) {
-                    toks.push(Token::from_symbol(&p)?);
+                    toks.push_back(Token::from_symbol(&p)?);
                     PartialToken::try_from(c)?
                 } else {
                     if p == "<" && c == '=' {
-                        toks.push(Token::LessThanEq);
+                        toks.push_back(Token::LessThanEq);
                         PartialToken::None
                     } else if p == ">" && c == '=' {
-                        toks.push(Token::GreaterThanEq);
+                        toks.push_back(Token::GreaterThanEq);
                         PartialToken::None
                     } else if p == ":" {
                         if c == '=' {
-                            toks.push(Token::Assign);
+                            toks.push_back(Token::Assign);
                             PartialToken::None
                         } else {
-                            toks.push(Token::Colon);
+                            toks.push_back(Token::Colon);
                             PartialToken::try_from(c)?
                         }
                     } else if p == "=" && c == '=' {
-                        toks.push(Token::DoubleEqual);
+                        toks.push_back(Token::DoubleEqual);
                         PartialToken::None
                     } else if p == "!" && c == '=' {
-                        toks.push(Token::BangEqual);
+                        toks.push_back(Token::BangEqual);
                         PartialToken::None
                     } else {
                         p.push(c);
