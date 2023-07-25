@@ -25,6 +25,7 @@ impl TokenStream {
     }
 
     pub fn pop_front(&mut self) -> Option<Token> { self.tokens.pop_front() }
+    pub fn push_front(&mut self, value: Token) -> () { self.tokens.push_front(value) }
     pub fn front(&self) -> Option<&Token> { self.tokens.front() }
 
     pub fn consume_identifier(&mut self) -> Result<String, ParserError> {

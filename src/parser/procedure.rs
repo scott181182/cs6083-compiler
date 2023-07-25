@@ -129,12 +129,12 @@ impl ParseTokens for ProcedureCallNode {
                 toks.pop_front();
                 Ok(ProcedureCallNode{ ident, arguments: None })
             },
-            Some(Token::Variable) => {
+            Some(_) => {
                 let arguments = ArgumentListNode::parse(toks)?;
                 toks.consume_expected(Token::RightParen)?;
                 Ok(ProcedureCallNode { ident, arguments: Some(arguments) })
             },
-            Some(tok) => Err(ParserError::UnexpectedToken("right paren or argument list".to_owned(), tok.clone())),
+            
             None => Err(ParserError::UnexpectedEndOfFile("right paren or argument list".to_owned()))
         }
     }
