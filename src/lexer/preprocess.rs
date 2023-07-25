@@ -12,8 +12,10 @@ enum WhitespaceStates {
     /// if the next character is an asterisk, goto MultiLineComment(1),
     /// otherwise, add the character to the output (with a slash to make up for the last character that was skipped).
     Slash,
+    
     /// Inside a single-line comment. Skip all characters until a newline (\n), which will return us to the Normal state.
     SingleLineComment,
+
     /// Inside `n` multiline comments (to track nested comments).
     /// Will check for slashes and asterisks that may increase or decrease our nesting level.
     MultiLineComment(u32),
