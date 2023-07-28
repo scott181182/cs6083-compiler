@@ -1,28 +1,29 @@
 use crate::lexer::Token;
+use crate::parser::declaration::DeclarationNode;
 
-use super::misc::{TypeMarkNode, BoundNode};
-use super::procedure::{ProcedureHeaderNode, ProcedureBodyNode};
-use super::util::{ParserError, ParseTokens, TokenStream};
-
+use super::util::{Analyze, Context, SemanticError, ValueType, NamedValueType};
 
 
 
 #[derive(Debug)]
-pub enum DeclarationNode {
-    Procedure{ global: bool, procedure: ProcedureDeclarationNode },
-    Variable{ global: bool, variable: VariableDeclarationNode }
+pub enum AnalyzedDeclaration {
+    Procedure{ ident: String, args: Vec<NamedValueType>, ret: ValueType },
+    Variable{ ident: String, typ: ValueType }
 }
-impl ParseTokens for DeclarationNode {
-    fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
-        let global = toks.consume_if(&Token::Global);
-        match toks.front() {
-            Some(Token::Procedure) => Ok(DeclarationNode::Procedure { global, procedure: ProcedureDeclarationNode::parse(toks)? }),
-            Some(Token::Variable) => Ok(DeclarationNode::Variable { global, variable: VariableDeclarationNode::parse(toks)? }),
-            Some(tok) => Err(ParserError::UnexpectedToken("declaration".to_owned(), tok.clone())),
-            None => Err(ParserError::UnexpectedEndOfFile("declaration".to_owned()))
-        }
+impl Analyze<AnalyzedDeclaration> for DeclarationNode {
+    fn analyze(self, ctx: &mut Context) -> Result<Self, SemanticError> {
+        match self {
+            DeclarationNode::Variable { global, variable } => {
+                ctx.set_type(true, variable.ident.clone(), (&variable.typ).into())?;
+            },
+            DeclarationNode::Procedure { global, procedure } => {
+
+            }
+        };
+        Ok(ValueType::Void)
     }
 }
+
 #[derive(Debug)]
 pub struct ProcedureDeclarationNode {
     pub header: ProcedureHeaderNode,

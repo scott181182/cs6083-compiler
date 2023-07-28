@@ -6,13 +6,13 @@ pub use program::*;
 
 
 
-mod declaration;
-mod misc;
-mod procedure;
-mod statement;
-mod program;
-mod expression;
-mod util;
+pub mod declaration;
+pub mod misc;
+pub mod procedure;
+pub mod statement;
+pub mod program;
+pub mod expression;
+pub mod util;
 
 
 

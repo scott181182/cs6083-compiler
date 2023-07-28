@@ -9,6 +9,7 @@ use thiserror::Error;
 
 mod lexer;
 mod parser;
+mod analyzer;
 
 
 
