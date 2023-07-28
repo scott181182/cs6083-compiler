@@ -184,7 +184,7 @@ pub fn lex(raw_content: String) -> Result<VecDeque<Token>, LexerError> {
                 PartialToken::try_from(c)?
             },
 
-            (PartialToken::NumberLiteral(mut p), cin) if cin.is_numeric() => {
+            (PartialToken::NumberLiteral(mut p), cin) if cin.is_numeric() || cin == '_' => {
                 p.push(cin);
                 PartialToken::NumberLiteral(p)
             },
