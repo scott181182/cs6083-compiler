@@ -98,7 +98,7 @@ impl Analyze<AnalyzedIf> for IfStatementNode {
     fn analyze(self, ctx: &mut Context, scope: &Scope) -> Result<AnalyzedIf, SemanticError> {
         let cond = self.cond.analyze(ctx, scope)?;
 
-        if cond.typ != ValueType::Boolean || cond.typ != ValueType::Integer {
+        if cond.typ.can_assign_to(&ValueType::Boolean) {
             return Err(SemanticError::InvalidConditionalExpression(cond.typ))
         }
 
@@ -113,11 +113,22 @@ impl Analyze<AnalyzedIf> for IfStatementNode {
 
 #[derive(Debug)]
 pub struct AnalyzedLoop {
-
+    pub init: Box<AnalyzedAssignment>,
+    pub cond: AnalyzedExpression,
+    pub block: AnalyzedBlock
 }
 impl Analyze<AnalyzedLoop> for LoopStatementNode {
     fn analyze(self, ctx: &mut Context, scope: &Scope) -> Result<AnalyzedLoop, SemanticError> {
-        todo!()
+        let init = self.assign.analyze(ctx, scope)?;
+        let cond = self.cond.analyze(ctx, scope)?;
+
+        if cond.typ.can_assign_to(&ValueType::Boolean) {
+            return Err(SemanticError::InvalidConditionalExpression(cond.typ))
+        }
+
+        let block = self.block.analyze(ctx, scope)?;
+
+        Ok(AnalyzedLoop { init: Box::new(init), cond, block })
     }
 }
 
@@ -125,10 +136,17 @@ impl Analyze<AnalyzedLoop> for LoopStatementNode {
 
 #[derive(Debug)]
 pub struct AnalyzedReturn {
-
+    pub expr: AnalyzedExpression
 }
 impl Analyze<AnalyzedReturn> for ReturnStatementNode {
     fn analyze(self, ctx: &mut Context, scope: &Scope) -> Result<AnalyzedReturn, SemanticError> {
-        todo!()
+        let expr = self.0.analyze(ctx, scope)?;
+
+        let expected_ret = ctx.get_return_type().clone();
+        if expr.typ != expected_ret {
+            Err(SemanticError::MismatchedType(expected_ret, expr.typ))
+        } else {
+            Ok(AnalyzedReturn { expr })
+        }
     }
 }

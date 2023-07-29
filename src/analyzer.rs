@@ -16,10 +16,10 @@ pub mod util;
 
 #[derive(Debug)]
 pub struct AnalyzedProgram {
-    name: String,
-    declarations: ScopeContext,
-    procedures: Vec<AnalyzedProcedure>,
-    block: statement::AnalyzedBlock
+    pub name: String,
+    pub declarations: ScopeContext,
+    pub procedures: Vec<AnalyzedProcedure>,
+    pub block: statement::AnalyzedBlock
 }
 impl AnalyzedProgram {
     pub fn analyze(value: ProgramNode) -> Result<Self, util::SemanticError> {

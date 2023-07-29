@@ -146,9 +146,7 @@ impl Context {
             scope_stack: Vec::new()
         }
     }
-    pub fn into_global(self) -> ScopeContext {
-        self.global_scope
-    }
+    pub fn into_global(self) -> ScopeContext { self.global_scope }
 
     pub fn set_type(&mut self, global: bool, ident: String, typ: ValueType) -> Result<(), SemanticError> {
         let variables = if global { &mut self.global_scope.variables } else { &mut self.local_scope.variables };
@@ -182,6 +180,7 @@ impl Context {
             None
         }
     }
+    pub fn get_return_type(&self) -> &ValueType { &self.local_scope.ret }
 
 
     pub fn start_stack(&mut self, ret: ValueType) {

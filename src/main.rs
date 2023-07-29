@@ -5,6 +5,8 @@ use std::process::exit;
 use parser::parse;
 use thiserror::Error;
 
+use crate::analyzer::AnalyzedProgram;
+
 
 
 mod lexer;
@@ -22,7 +24,9 @@ enum ProgramError {
     #[error(transparent)]
     Lexer(#[from] lexer::LexerError),
     #[error(transparent)]
-    Parser(#[from] parser::ParserError)
+    Parser(#[from] parser::ParserError),
+    #[error(transparent)]
+    Semantic(#[from] analyzer::util::SemanticError)
 }
 
 #[derive(Error, Debug)]
@@ -75,7 +79,8 @@ fn run_program() -> Result<(), ProgramError> {
     let toks = lexer::lex(input_data)?;
     // println!("{:?}", toks);
     let program = parse(toks)?;
-    println!("{:?}", program);
+    let analyzed_program = AnalyzedProgram::analyze(program)?;
+    println!("{:?}", analyzed_program);
 
     Ok(())
 }
