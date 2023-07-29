@@ -1,4 +1,4 @@
-use crate::analyzer::util::SemanticError;
+use crate::analyzer::error::SemanticError;
 use crate::lexer::Token;
 
 use super::expression::ExpressionNode;

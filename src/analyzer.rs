@@ -6,7 +6,7 @@ use self::util::{Context, Scope, Analyze, ScopeContext};
 
 
 pub mod declaration;
-// pub mod misc;
+pub mod error;
 pub mod procedure;
 pub mod statement;
 pub mod expression;
@@ -22,7 +22,7 @@ pub struct AnalyzedProgram {
     pub block: statement::AnalyzedBlock
 }
 impl AnalyzedProgram {
-    pub fn analyze(value: ProgramNode) -> Result<Self, util::SemanticError> {
+    pub fn analyze(value: ProgramNode) -> Result<Self, error::SemanticError> {
         let mut ctx = Context::new();
 
         let name = value.header.ident;

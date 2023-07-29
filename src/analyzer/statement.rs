@@ -1,7 +1,8 @@
 use crate::parser::statement::{StatementNode, AssignmentStatementNode, IfStatementNode, DestinationNode, LoopStatementNode, ReturnStatementNode};
 
+use super::error::SemanticError;
 use super::expression::AnalyzedExpression;
-use super::util::{Analyze, Context, SemanticError, Scope, ValueType};
+use super::util::{Analyze, Context, Scope, ValueType, AnalyzeExpression, TypeHint};
 
 
 
@@ -58,10 +59,7 @@ impl Analyze<AnalyzedDestination> for DestinationNode {
         
         if let Some(idx_expr_node) = self.expr {
             if let ValueType::Array(arr_type, _) = typ {
-                let idx_expr = idx_expr_node.analyze(ctx, scope)?;
-                if idx_expr.typ != ValueType::Integer {
-                    return Err(SemanticError::NonIntegerIndex(self.ident, idx_expr.typ))
-                }
+                let idx_expr = idx_expr_node.analyze_expr(ctx, TypeHint::Type(ValueType::Integer))?;
                 Ok(AnalyzedDestination { ident: self.ident, expr: Some(idx_expr), typ: *arr_type })
             } else {
                 return Err(SemanticError::IndexOnNonArray(self.ident));
@@ -75,13 +73,9 @@ impl Analyze<AnalyzedDestination> for DestinationNode {
 impl Analyze<AnalyzedAssignment> for AssignmentStatementNode {
     fn analyze(self, ctx: &mut Context, scope: &Scope) -> Result<AnalyzedAssignment, SemanticError> {
         let dest = self.dest.analyze(ctx, scope)?;
-        let expr = self.expr.analyze(ctx, scope)?;
+        let expr = self.expr.analyze_expr(ctx, TypeHint::Type(dest.typ.clone()))?;
 
-        if !expr.typ.can_assign_to(&dest.typ) {
-            Err(SemanticError::MismatchedType(dest.typ, expr.typ))
-        } else {
-            Ok(AnalyzedAssignment { dest, expr })
-        }
+        Ok(AnalyzedAssignment{ dest, expr })
     }
 }
 
@@ -96,11 +90,7 @@ pub struct AnalyzedIf {
 
 impl Analyze<AnalyzedIf> for IfStatementNode {
     fn analyze(self, ctx: &mut Context, scope: &Scope) -> Result<AnalyzedIf, SemanticError> {
-        let cond = self.cond.analyze(ctx, scope)?;
-
-        if cond.typ.can_assign_to(&ValueType::Boolean) {
-            return Err(SemanticError::InvalidConditionalExpression(cond.typ))
-        }
+        let cond = self.cond.analyze_expr(ctx, TypeHint::Conditional)?;
 
         let then_block = self.then_block.analyze(ctx, scope)?;
         let else_block = self.else_block.map(move |blk| blk.analyze(ctx, scope)).transpose()?;
@@ -120,11 +110,7 @@ pub struct AnalyzedLoop {
 impl Analyze<AnalyzedLoop> for LoopStatementNode {
     fn analyze(self, ctx: &mut Context, scope: &Scope) -> Result<AnalyzedLoop, SemanticError> {
         let init = self.assign.analyze(ctx, scope)?;
-        let cond = self.cond.analyze(ctx, scope)?;
-
-        if cond.typ.can_assign_to(&ValueType::Boolean) {
-            return Err(SemanticError::InvalidConditionalExpression(cond.typ))
-        }
+        let cond = self.cond.analyze_expr(ctx, TypeHint::Conditional)?;
 
         let block = self.block.analyze(ctx, scope)?;
 
@@ -140,13 +126,12 @@ pub struct AnalyzedReturn {
 }
 impl Analyze<AnalyzedReturn> for ReturnStatementNode {
     fn analyze(self, ctx: &mut Context, scope: &Scope) -> Result<AnalyzedReturn, SemanticError> {
-        let expr = self.0.analyze(ctx, scope)?;
-
         let expected_ret = ctx.get_return_type().clone();
-        if expr.typ != expected_ret {
-            Err(SemanticError::MismatchedType(expected_ret, expr.typ))
-        } else {
-            Ok(AnalyzedReturn { expr })
+        if expected_ret == ValueType::Void {
+            
         }
+        let expr = self.0.analyze_expr(ctx, TypeHint::Type(expected_ret))?;
+
+        Ok(AnalyzedReturn { expr })
     }
 }

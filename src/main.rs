@@ -26,7 +26,7 @@ enum ProgramError {
     #[error(transparent)]
     Parser(#[from] parser::ParserError),
     #[error(transparent)]
-    Semantic(#[from] analyzer::util::SemanticError)
+    Semantic(#[from] analyzer::error::SemanticError)
 }
 
 #[derive(Error, Debug)]

@@ -1,7 +1,9 @@
 use crate::parser::declaration::ProcedureDeclarationNode;
 use crate::parser::procedure::ParameterListNode;
+
+use super::error::SemanticError;
 use super::statement::AnalyzedBlock;
-use super::util::{Analyze, Context, ProcedureSignature, SemanticError, Scope, ValueType, NamedValueType, ScopeContext};
+use super::util::{Analyze, Context, ProcedureSignature, Scope, ValueType, NamedValueType, ScopeContext};
 
 
 

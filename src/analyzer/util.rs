@@ -1,48 +1,11 @@
 use std::collections::HashMap;
-use std::num::{ParseIntError, ParseFloatError};
-
-use thiserror::Error;
 
 use crate::parser::misc::TypeMarkNode;
+use super::error::SemanticError;
 
 
 
-#[derive(Error, Debug)]
-pub enum SemanticError {
-    #[error("Use of undeclared variable {0}")]
-    UndeclaredReference(String),
-    #[error("Assignment to undeclared variable {0}")]
-    UndeclaredAssignment(String),
-    #[error("'{0}' was redeclared")]
-    Redeclaration(String),
-    #[error("Expected additional scope after procedure, but there were none")]
-    OutOfScope,
-
-    #[error(transparent)]
-    InvalidInteger(#[from] ParseIntError),
-    #[error(transparent)]
-    InvalidFloat(#[from] ParseFloatError),
-
-    #[error("Found statements after return statement")]
-    StatementAfterReturn,
-
-    // Array Errors
-    #[error("Attempt to index non-array variable {0}")]
-    IndexOnNonArray(String),
-    #[error("Attempt to index array {0} with non-integer type {1:?}")]
-    NonIntegerIndex(String, ValueType),
-
-    // Type Errors
-    #[error("Expected {0:?} type, but found {1:?}")]
-    MismatchedType(ValueType, ValueType),
-    #[error("Expected Integer or Boolean expression for conditional, but found {0:?}")]
-    InvalidConditionalExpression(ValueType)
-}
-
-
-
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ValueType {
     Boolean,
     Integer,
@@ -201,4 +164,24 @@ impl Context {
 
 pub trait Analyze<T> {
     fn analyze(self, ctx: &mut Context, scope: &Scope) -> Result<T, SemanticError>;
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum TypeHint {
+    Type(ValueType),
+    Conditional
+}
+impl TypeHint {
+    pub fn unify(self, other: ValueType) -> Result<TypeHint, SemanticError> {
+        match (self, other) {
+            (TypeHint::Type(hint_typ), other_typ) if hint_typ == other_typ => Ok(TypeHint::Type(hint_typ)),
+            (TypeHint::Conditional, ValueType::Integer) => Ok(TypeHint::Type(ValueType::Integer)),
+            (TypeHint::Conditional, ValueType::Boolean) => Ok(TypeHint::Type(ValueType::Boolean)),
+            _ => Err(SemanticError::IncompatableTypes(self, other))
+        }
+    }
+}
+
+pub trait AnalyzeExpression<T> {
+    fn analyze_expr(self, ctx: &mut Context, hint: TypeHint) -> Result<T, SemanticError>;
 }
