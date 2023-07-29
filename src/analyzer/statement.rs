@@ -1,163 +1,134 @@
-use crate::lexer::Token;
+use crate::parser::statement::{StatementNode, AssignmentStatementNode, IfStatementNode, DestinationNode, LoopStatementNode, ReturnStatementNode};
 
-use super::expression::ExpressionNode;
-use super::util::{ParserError, ParseTokens, TokenStream, CanParseTokens};
-
-
-
-#[derive(Debug)]
-pub enum StatementNode {
-    Assignment(AssignmentStatementNode),
-    If(IfStatementNode),
-    Loop(LoopStatementNode),
-    Return(ReturnStatementNode)
-}
-impl ParseTokens for StatementNode {
-    fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
-        match toks.front() {
-            Some(Token::Identifier(_)) => Ok(StatementNode::Assignment(AssignmentStatementNode::parse(toks)?)),
-            Some(Token::If) => Ok(StatementNode::If(IfStatementNode::parse(toks)?)),
-            Some(Token::For) => Ok(StatementNode::Loop(LoopStatementNode::parse(toks)?)),
-            Some(Token::Return) => Ok(StatementNode::Return(ReturnStatementNode::parse(toks)?)),
-            Some(tok) => Err(ParserError::UnexpectedToken("statement".to_owned(), tok.clone())),
-            None => Err(ParserError::UnexpectedEndOfFile("statement".to_owned()))
-        }
-    }
-}
-impl CanParseTokens for StatementNode {
-    fn can_parse(toks: &TokenStream) -> bool {
-        match toks.front() {
-            Some(Token::If) | Some(Token::For) | Some(Token::Return) | Some(Token::Identifier(_)) => true,
-            _ => false
-        }
-    }
-}
+use super::expression::AnalyzedExpression;
+use super::util::{Analyze, Context, SemanticError, Scope, ValueType};
 
 
 
 #[derive(Debug)]
-pub struct AssignmentStatementNode {
-    pub dest: DestinationNode,
-    pub expr: ExpressionNode
+pub struct AnalyzedBlock(pub Vec<AnalyzedStatement>);
+
+#[derive(Debug)]
+pub enum AnalyzedStatement {
+    Assignment(AnalyzedAssignment),
+    If(AnalyzedIf),
+    Loop(AnalyzedLoop),
+    Return(AnalyzedReturn)
 }
-impl ParseTokens for AssignmentStatementNode {
-    fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
-        let dest = DestinationNode::parse(toks)?;
-        toks.consume_expected(Token::Assign)?;
-        let expr = ExpressionNode::parse(toks)?;
-        Ok(AssignmentStatementNode { dest, expr })
+
+impl Analyze<AnalyzedBlock> for Vec<StatementNode> {
+    fn analyze(self, ctx: &mut Context, scope: &Scope) -> Result<AnalyzedBlock, SemanticError> {
+        let stmts = self.into_iter()
+            .map(|stmt| stmt.analyze(ctx, scope))
+            .collect::<Result<Vec<AnalyzedStatement>, SemanticError>>()?;
+
+        Ok(AnalyzedBlock(stmts))
+    }
+}
+impl Analyze<AnalyzedStatement> for StatementNode {
+    fn analyze(self, ctx: &mut Context, scope: &Scope) -> Result<AnalyzedStatement, SemanticError> {
+        let stmt = match self {
+            StatementNode::Assignment(node) => AnalyzedStatement::Assignment(node.analyze(ctx, scope)?),
+            StatementNode::If(node) => AnalyzedStatement::If(node.analyze(ctx, scope)?),
+            StatementNode::Loop(node) => AnalyzedStatement::Loop(node.analyze(ctx, scope)?),
+            StatementNode::Return(node) => AnalyzedStatement::Return(node.analyze(ctx, scope)?)
+        };
+        Ok(stmt)
     }
 }
 
 
 
 #[derive(Debug)]
-pub struct DestinationNode {
+pub struct AnalyzedAssignment{
+    pub dest: AnalyzedDestination,
+    pub expr: AnalyzedExpression
+}
+#[derive(Debug)]
+pub struct AnalyzedDestination {
     pub ident: String,
-    pub expr: Option<ExpressionNode>
+    pub expr: Option<AnalyzedExpression>,
+    pub typ: ValueType
 }
-impl ParseTokens for DestinationNode {
-    fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
-        let ident = toks.consume_identifier()?;
-
-        if toks.consume_if(&Token::LeftBracket) {
-            let expr = ExpressionNode::parse(toks)?;
-            toks.consume_expected(Token::RightBracket)?;
-            Ok(DestinationNode{ ident, expr: Some(expr) })
-        } else {
-            Ok(DestinationNode{ ident, expr: None })
-        }
-    }
-}
-
-
-
-#[derive(Debug)]
-pub struct IfStatementNode {
-    pub cond: ExpressionNode,
-    pub then_block: Vec<StatementNode>,
-    pub else_block: Option<Vec<StatementNode>>
-}
-impl ParseTokens for IfStatementNode {
-    fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
-        let mut then_block = Vec::new();
-        let mut else_block = Vec::new();
-
-        toks.consume_expected(Token::If)?;
-        toks.consume_expected(Token::LeftParen)?;
-        let cond = ExpressionNode::parse(toks)?;
-        toks.consume_expected(Token::RightParen)?;
-        toks.consume_expected(Token::Then)?;
-
-        // Parse then body
-        while StatementNode::can_parse(toks) {
-            then_block.push(StatementNode::parse(toks)?);
-            toks.consume_expected(Token::Semicolon)?;
-        }
-
-        let has_else = toks.consume_if(&Token::Else);
-        // Parse else body
-        if has_else {
-            toks.pop_front();
-            while StatementNode::can_parse(toks) {
-                else_block.push(StatementNode::parse(toks)?);
-                toks.consume_expected(Token::Semicolon)?;
+impl Analyze<AnalyzedDestination> for DestinationNode {
+    fn analyze(self, ctx: &mut Context, scope: &Scope) -> Result<AnalyzedDestination, SemanticError> {
+        let typ = ctx.get_variable_type(&self.ident)
+            .ok_or(SemanticError::UndeclaredAssignment(self.ident.clone()))?
+            .clone();
+        
+        if let Some(idx_expr_node) = self.expr {
+            if let ValueType::Array(arr_type, _) = typ {
+                let idx_expr = idx_expr_node.analyze(ctx, scope)?;
+                if idx_expr.typ != ValueType::Integer {
+                    return Err(SemanticError::NonIntegerIndex(self.ident, idx_expr.typ))
+                }
+                Ok(AnalyzedDestination { ident: self.ident, expr: Some(idx_expr), typ: *arr_type })
+            } else {
+                return Err(SemanticError::IndexOnNonArray(self.ident));
             }
+        } else {
+            Ok(AnalyzedDestination { ident: self.ident, expr: None, typ })
         }
+    }
+}
 
-        toks.consume_expected(Token::End)?;
-        toks.consume_expected(Token::If)?;
+impl Analyze<AnalyzedAssignment> for AssignmentStatementNode {
+    fn analyze(self, ctx: &mut Context, scope: &Scope) -> Result<AnalyzedAssignment, SemanticError> {
+        let dest = self.dest.analyze(ctx, scope)?;
+        let expr = self.expr.analyze(ctx, scope)?;
 
-        Ok(IfStatementNode {
-            cond,
-            then_block,
-            else_block: if has_else { Some(else_block) } else { None }
-        })
+        if !expr.typ.can_assign_to(&dest.typ) {
+            Err(SemanticError::MismatchedType(dest.typ, expr.typ))
+        } else {
+            Ok(AnalyzedAssignment { dest, expr })
+        }
     }
 }
 
 
 
 #[derive(Debug)]
-pub struct LoopStatementNode {
-    pub assign: AssignmentStatementNode,
-    pub cond: ExpressionNode,
-    pub block: Vec<StatementNode>
+pub struct AnalyzedIf {
+    pub cond: AnalyzedExpression,
+    pub then_block: AnalyzedBlock,
+    pub else_block: Option<AnalyzedBlock>
 }
-impl ParseTokens for LoopStatementNode {
-    fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
-        let mut block = Vec::new();
 
-        toks.consume_expected(Token::For)?;
-        toks.consume_expected(Token::LeftParen)?;
-        let assign = AssignmentStatementNode::parse(toks)?;
-        toks.consume_expected(Token::Semicolon)?;
-        let cond = ExpressionNode::parse(toks)?;
-        toks.consume_expected(Token::RightParen)?;
+impl Analyze<AnalyzedIf> for IfStatementNode {
+    fn analyze(self, ctx: &mut Context, scope: &Scope) -> Result<AnalyzedIf, SemanticError> {
+        let cond = self.cond.analyze(ctx, scope)?;
 
-        // Parse the body
-        while StatementNode::can_parse(toks) {
-            block.push(StatementNode::parse(toks)?);
-            toks.consume_expected(Token::Semicolon)?;
+        if cond.typ != ValueType::Boolean || cond.typ != ValueType::Integer {
+            return Err(SemanticError::InvalidConditionalExpression(cond.typ))
         }
 
-        toks.consume_expected(Token::End)?;
-        toks.consume_expected(Token::For)?;
+        let then_block = self.then_block.analyze(ctx, scope)?;
+        let else_block = self.else_block.map(move |blk| blk.analyze(ctx, scope)).transpose()?;
 
-        Ok(LoopStatementNode { assign, cond, block })
+        Ok(AnalyzedIf { cond, then_block, else_block })
     }
 }
 
 
 
 #[derive(Debug)]
-pub struct ReturnStatementNode(pub ExpressionNode);
+pub struct AnalyzedLoop {
 
-impl ParseTokens for ReturnStatementNode {
-    fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
-        toks.consume_expected(Token::Return)?;
-        let expr = ExpressionNode::parse(toks)?;
+}
+impl Analyze<AnalyzedLoop> for LoopStatementNode {
+    fn analyze(self, ctx: &mut Context, scope: &Scope) -> Result<AnalyzedLoop, SemanticError> {
+        todo!()
+    }
+}
 
-        Ok(ReturnStatementNode(expr))
+
+
+#[derive(Debug)]
+pub struct AnalyzedReturn {
+
+}
+impl Analyze<AnalyzedReturn> for ReturnStatementNode {
+    fn analyze(self, ctx: &mut Context, scope: &Scope) -> Result<AnalyzedReturn, SemanticError> {
+        todo!()
     }
 }

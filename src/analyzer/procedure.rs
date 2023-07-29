@@ -1,161 +1,58 @@
-use crate::lexer::Token;
-
-use super::declaration::{DeclarationNode, VariableDeclarationNode};
-use super::expression::ExpressionNode;
-use super::misc::TypeMarkNode;
-use super::statement::StatementNode;
-use super::util::{ParserError, ParseTokens, TokenStream};
+use crate::parser::declaration::ProcedureDeclarationNode;
+use crate::parser::procedure::ParameterListNode;
+use super::statement::AnalyzedBlock;
+use super::util::{Analyze, Context, ProcedureSignature, SemanticError, Scope, ValueType, NamedValueType, ScopeContext};
 
 
 
 #[derive(Debug)]
-pub struct ProcedureHeaderNode {
+pub struct AnalyzedProcedure {
     pub ident: String,
-    pub typ: TypeMarkNode,
-    pub parameters: Option<ParameterListNode>
+    pub args: Vec<NamedValueType>,
+    pub declarations: ScopeContext,
+    pub procedures: Vec<Box::<AnalyzedProcedure>>,
+    pub block: AnalyzedBlock
 }
-impl ParseTokens for ProcedureHeaderNode {
-    fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
-        toks.consume_expected(Token::Procedure)?;
-        let ident = toks.consume_identifier()?;
-        toks.consume_expected(Token::Colon)?;
-        let typ = TypeMarkNode::parse(toks)?;
-        toks.consume_expected(Token::LeftParen)?;
-
-        match toks.front() {
-            Some(Token::RightParen) => {
-                toks.pop_front();
-                Ok(ProcedureHeaderNode{ ident, typ, parameters: None })
-            },
-            Some(Token::Variable) => {
-                let parameters = ParameterListNode::parse(toks)?;
-                toks.consume_expected(Token::RightParen)?;
-                Ok(ProcedureHeaderNode { ident, typ, parameters: Some(parameters) })
-            },
-            Some(tok) => Err(ParserError::UnexpectedToken("right paren or variable declaration".to_owned(), tok.clone())),
-            None => Err(ParserError::UnexpectedEndOfFile("right paren or variable declaration".to_owned()))
-        }
-    }
-}
+impl Analyze<AnalyzedProcedure> for ProcedureDeclarationNode {
+    fn analyze(self, ctx: &mut Context, scope: &Scope) -> Result<AnalyzedProcedure, SemanticError> {
+        // Analyze Signature
+        let args = match self.header.parameters {
+            Some(ParameterListNode(params)) => params.into_iter()
+                .map(|param| param.try_into())
+                .collect::<Result<Vec<NamedValueType>, SemanticError>>()?,
+            None => Vec::new()
+        };
+        let ident = self.header.ident;
+        let ret: ValueType = self.header.typ.into();
+        let sig = ProcedureSignature(args.clone(), ret.clone());
+        ctx.set_proc(scope == &Scope::Global, ident.clone(), sig)?;
 
 
 
-#[derive(Debug)]
-pub struct ParameterListNode(pub Vec<ParameterNode>);
+        // Start on body
+        ctx.start_stack(ret);
 
-impl ParseTokens for ParameterListNode {
-    fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
-        let mut parameters = Vec::new();
-
-        parameters.push(ParameterNode::parse(toks)?);
-
-        while let Some(&Token::Comma) = toks.front() {
-            toks.consume_expected(Token::Comma)?;
-            parameters.push(ParameterNode::parse(toks)?);
+        for arg in args.iter() {
+            ctx.set_type(false, arg.0.clone(), arg.1.clone())?;
         }
 
-        Ok(ParameterListNode(parameters))
-    }
-}
-
-
-
-
-#[derive(Debug)]
-pub struct ParameterNode(pub VariableDeclarationNode);
-
-impl ParseTokens for ParameterNode {
-    fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
-        VariableDeclarationNode::parse(toks).map(ParameterNode)
-    }
-}
-
-
-
-#[derive(Debug)]
-pub struct ProcedureBodyNode {
-    pub declarations: Vec<DeclarationNode>,
-    pub statements: Vec<StatementNode>
-}
-impl ParseTokens for ProcedureBodyNode {
-    fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
-        let mut declarations = Vec::new();
-        let mut statements = Vec::new();
-
-        loop {
-            let next = toks.front();
-            if let Some(Token::Begin) = next {
-                break;
-            } else if let None = next {
-                return Err(ParserError::UnexpectedEndOfFile("begin or declaration".to_owned()));
-            } else {
-                declarations.push(DeclarationNode::parse(toks)?);
-                toks.consume_expected(Token::Semicolon)?;
+        let mut procedures = Vec::new();
+        for decl in self.body.declarations {
+            if let Some(proc) = decl.analyze(ctx, &Scope::Local)? {
+                procedures.push(Box::new(proc));
             }
         }
-        toks.consume_expected(Token::Begin)?;
-        loop {
-            let next = toks.front();
-            if let Some(Token::End) = next {
-                break;
-            } else if let None = next {
-                return Err(ParserError::UnexpectedEndOfFile("begin or declaration".to_owned()));
-            } else {
-                statements.push(StatementNode::parse(toks)?);
-                toks.consume_expected(Token::Semicolon)?;
-            }
-        }
-        toks.consume_expected(Token::End)?;
-        toks.consume_expected(Token::Procedure)?;
 
-        Ok(ProcedureBodyNode{ declarations, statements })
+        let block = self.body.statements.analyze(ctx, &Scope::Local)?;
+        
+        Ok(AnalyzedProcedure {
+            ident,
+            args,
+            declarations: ctx.end_stack()?,
+            procedures,
+            block
+        })
     }
 }
 
 
-
-#[derive(Debug)]
-pub struct ProcedureCallNode {
-    pub ident: String,
-    pub arguments: Option<ArgumentListNode>
-}
-impl ParseTokens for ProcedureCallNode {
-    fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
-        let ident = toks.consume_identifier()?;
-        toks.consume_expected(Token::LeftParen)?;
-
-        match toks.front() {
-            Some(Token::RightParen) => {
-                toks.pop_front();
-                Ok(ProcedureCallNode{ ident, arguments: None })
-            },
-            Some(_) => {
-                let arguments = ArgumentListNode::parse(toks)?;
-                toks.consume_expected(Token::RightParen)?;
-                Ok(ProcedureCallNode { ident, arguments: Some(arguments) })
-            },
-            
-            None => Err(ParserError::UnexpectedEndOfFile("right paren or argument list".to_owned()))
-        }
-    }
-}
-
-
-
-#[derive(Debug)]
-pub struct ArgumentListNode(pub Vec<ExpressionNode>);
-
-impl ParseTokens for ArgumentListNode {
-    fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
-        let mut arguments = Vec::new();
-
-        arguments.push(ExpressionNode::parse(toks)?);
-
-        while let Some(&Token::Comma) = toks.front() {
-            toks.consume_expected(Token::Comma)?;
-            arguments.push(ExpressionNode::parse(toks)?);
-        }
-
-        Ok(ArgumentListNode(arguments))
-    }
-}

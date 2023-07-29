@@ -1,4 +1,6 @@
+use crate::analyzer::util::SemanticError;
 use crate::lexer::Token;
+
 use super::expression::ExpressionNode;
 use super::util::{ParserError, ParseTokens, TokenStream};
 
@@ -40,6 +42,28 @@ impl ParseTokens for BoundNode {
 
 #[derive(Debug)]
 pub struct NumberNode(pub String);
+
+impl TryFrom<NumberNode> for usize {
+    type Error = SemanticError;
+    fn try_from(value: NumberNode) -> Result<Self, Self::Error> {
+        let value = value.0.replace("_", "");
+        Ok(usize::from_str_radix(&value, 10)?)
+    }
+}
+impl TryFrom<NumberNode> for i64 {
+    type Error = SemanticError;
+    fn try_from(value: NumberNode) -> Result<Self, Self::Error> {
+        let value = value.0.replace("_", "");
+        Ok(i64::from_str_radix(&value, 10)?)
+    }
+}
+impl TryFrom<NumberNode> for f64 {
+    type Error = SemanticError;
+    fn try_from(value: NumberNode) -> Result<Self, Self::Error> {
+        let value = value.0.replace("_", "");
+        Ok(value.parse::<f64>()?)
+    }
+}
 
 impl ParseTokens for NumberNode {
     fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
