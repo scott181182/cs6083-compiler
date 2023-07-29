@@ -90,7 +90,8 @@ impl Token {
             "not" => Token::Not,
             "true" => Token::True,
             "false" => Token::False,
-            _ => Token::Identifier(value)
+            // Identifiers a case-insensitive, so lowercase!
+            _ => Token::Identifier(value.to_lowercase())
         }
     }
 
