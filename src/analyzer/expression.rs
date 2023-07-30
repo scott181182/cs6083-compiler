@@ -85,16 +85,131 @@ impl AnalyzeExpression<ExpressionNode> for AnalyzedExpression {
 #[derive(Debug)]
 pub enum AnalyzedArithmetic {
     Plus(Box<AnalyzedArithmetic>, AnalyzedRelation),
+    ArrayScalarPlus(Box<AnalyzedArithmetic>, AnalyzedRelation),
+    ScalarArrayPlus(Box<AnalyzedArithmetic>, AnalyzedRelation),
+    ArrayPlus(Box<AnalyzedArithmetic>, AnalyzedRelation),
+
     Minus(Box<AnalyzedArithmetic>, AnalyzedRelation),
+    ArrayScalarMinus(Box<AnalyzedArithmetic>, AnalyzedRelation),
+    ScalarArrayMinus(Box<AnalyzedArithmetic>, AnalyzedRelation),
+    ArrayMinus(Box<AnalyzedArithmetic>, AnalyzedRelation),
+
+    Cast(Box<AnalyzedArithmetic>, ValueType),
     Nop(AnalyzedRelation)
+}
+impl AnalyzedArithmetic {
+    pub fn cast(self, typ: ValueType) -> AnalyzedArithmetic {
+        AnalyzedArithmetic::Cast(Box::new(self), typ)
+    }
 }
 impl AnalyzeExpression<ArithmeticNode> for AnalyzedArithmetic {
     fn analyze_expr(value: ArithmeticNode, ctx: &mut Context) -> Result<Self, SemanticError> {
-        todo!()
+        match value {
+            ArithmeticNode::Nop(relation) => Ok(AnalyzedArithmetic::Nop(AnalyzedRelation::analyze_expr(relation, ctx)?)),
+
+            ArithmeticNode::Plus(arith, relation) => {
+                let arith = AnalyzedArithmetic::analyze_expr(*arith, ctx)?;
+                let relation = AnalyzedRelation::analyze_expr(relation, ctx)?;
+
+                let arith_typ = arith.get_type(ctx)?;
+                let relation_typ = relation.get_type(ctx)?;
+                match (arith_typ, relation_typ) {
+                    // Non-casting adds
+                    (ValueType::Integer, ValueType::Integer) |
+                    (ValueType::Float, ValueType::Float) =>
+                        Ok(AnalyzedArithmetic::Plus(Box::new(arith), relation)),
+                    (ValueType::Array(box ValueType::Integer, bound1), ValueType::Array(box ValueType::Integer, bound2)) |
+                    (ValueType::Array(box ValueType::Float, bound1), ValueType::Array(box ValueType::Float, bound2)) if bound1 == bound2 =>
+                        Ok(AnalyzedArithmetic::ArrayPlus(Box::new(arith), relation)),
+
+                    // Scalar + Scalar w/ Casting
+                    (ValueType::Integer, ValueType::Float) => Ok(AnalyzedArithmetic::Plus(Box::new(arith.cast(ValueType::Float)), relation)),
+                    (ValueType::Float, ValueType::Integer) => Ok(AnalyzedArithmetic::Plus(Box::new(arith), relation.cast(ValueType::Float))),
+
+                    // Array + Scalar
+                    (ValueType::Array(box ValueType::Integer, _), ValueType::Integer) =>
+                        Ok(AnalyzedArithmetic::ArrayScalarPlus(Box::new(arith), relation)),
+                    (ValueType::Array(box ValueType::Integer, _), ValueType::Float) =>
+                        Ok(AnalyzedArithmetic::ArrayScalarPlus(Box::new(arith), relation.cast(ValueType::Integer))),
+                    (ValueType::Array(box ValueType::Float, _), ValueType::Integer) =>
+                        Ok(AnalyzedArithmetic::ArrayScalarPlus(Box::new(arith), relation.cast(ValueType::Float))),
+                    (ValueType::Array(box ValueType::Float, _), ValueType::Float) =>
+                        Ok(AnalyzedArithmetic::ArrayScalarPlus(Box::new(arith), relation)),
+
+                    // Array + Scalar
+                    (ValueType::Integer, ValueType::Array(box ValueType::Integer, _)) =>
+                        Ok(AnalyzedArithmetic::ScalarArrayPlus(Box::new(arith), relation)),
+                    (ValueType::Float, ValueType::Array(box ValueType::Integer, _)) =>
+                        Ok(AnalyzedArithmetic::ScalarArrayPlus(Box::new(arith.cast(ValueType::Integer)), relation)),
+                    (ValueType::Integer, ValueType::Array(box ValueType::Float, _)) =>
+                        Ok(AnalyzedArithmetic::ScalarArrayPlus(Box::new(arith.cast(ValueType::Float)), relation)),
+                    (ValueType::Float, ValueType::Array(box ValueType::Float, _)) =>
+                        Ok(AnalyzedArithmetic::ScalarArrayPlus(Box::new(arith), relation)),
+
+                    (t1, t2) => Err(SemanticError::MismatchedType(t1, t2))
+                }
+            }
+            
+            ArithmeticNode::Minus(arith, relation) => {
+                let arith = AnalyzedArithmetic::analyze_expr(*arith, ctx)?;
+                let relation = AnalyzedRelation::analyze_expr(relation, ctx)?;
+
+                let arith_typ = arith.get_type(ctx)?;
+                let relation_typ = relation.get_type(ctx)?;
+                match (arith_typ, relation_typ) {
+                    // Non-casting subtractions
+                    (ValueType::Integer, ValueType::Integer) |
+                    (ValueType::Float, ValueType::Float) =>
+                        Ok(AnalyzedArithmetic::Minus(Box::new(arith), relation)),
+                    (ValueType::Array(box ValueType::Integer, bound1), ValueType::Array(box ValueType::Integer, bound2)) |
+                    (ValueType::Array(box ValueType::Float, bound1), ValueType::Array(box ValueType::Float, bound2)) if bound1 == bound2 =>
+                        Ok(AnalyzedArithmetic::ArrayMinus(Box::new(arith), relation)),
+
+                    // Scalar - Scalar w/ Casting
+                    (ValueType::Integer, ValueType::Float) => Ok(AnalyzedArithmetic::Minus(Box::new(arith.cast(ValueType::Float)), relation)),
+                    (ValueType::Float, ValueType::Integer) => Ok(AnalyzedArithmetic::Minus(Box::new(arith), relation.cast(ValueType::Float))),
+
+                    // Array - Scalar
+                    (ValueType::Array(box ValueType::Integer, _), ValueType::Integer) =>
+                        Ok(AnalyzedArithmetic::ArrayScalarMinus(Box::new(arith), relation)),
+                    (ValueType::Array(box ValueType::Integer, _), ValueType::Float) =>
+                        Ok(AnalyzedArithmetic::ArrayScalarMinus(Box::new(arith), relation.cast(ValueType::Integer))),
+                    (ValueType::Array(box ValueType::Float, _), ValueType::Integer) =>
+                        Ok(AnalyzedArithmetic::ArrayScalarMinus(Box::new(arith), relation.cast(ValueType::Float))),
+                    (ValueType::Array(box ValueType::Float, _), ValueType::Float) =>
+                        Ok(AnalyzedArithmetic::ArrayScalarMinus(Box::new(arith), relation)),
+
+                    // Array - Scalar
+                    (ValueType::Integer, ValueType::Array(box ValueType::Integer, _)) =>
+                        Ok(AnalyzedArithmetic::ScalarArrayMinus(Box::new(arith), relation)),
+                    (ValueType::Float, ValueType::Array(box ValueType::Integer, _)) =>
+                        Ok(AnalyzedArithmetic::ScalarArrayMinus(Box::new(arith.cast(ValueType::Integer)), relation)),
+                    (ValueType::Integer, ValueType::Array(box ValueType::Float, _)) =>
+                        Ok(AnalyzedArithmetic::ScalarArrayMinus(Box::new(arith.cast(ValueType::Float)), relation)),
+                    (ValueType::Float, ValueType::Array(box ValueType::Float, _)) =>
+                        Ok(AnalyzedArithmetic::ScalarArrayMinus(Box::new(arith), relation)),
+
+                    (t1, t2) => Err(SemanticError::MismatchedType(t1, t2))
+                }
+            }
+        }
     }
 
     fn get_type(&self, ctx: &Context) -> Result<ValueType, SemanticError> {
-        todo!()
+        match self {
+            AnalyzedArithmetic::Nop(relation) => relation.get_type(ctx),
+            AnalyzedArithmetic::Cast(_, typ) => Ok(typ.clone()),
+            
+            AnalyzedArithmetic::Plus(_, relation) => relation.get_type(ctx),
+            AnalyzedArithmetic::ArrayScalarPlus(arith, _) => arith.get_type(ctx),
+            AnalyzedArithmetic::ScalarArrayPlus(_, relation) => relation.get_type(ctx),
+            AnalyzedArithmetic::ArrayPlus(_, relation) => relation.get_type(ctx),
+            
+            AnalyzedArithmetic::Minus(_, relation) => relation.get_type(ctx),
+            AnalyzedArithmetic::ArrayScalarMinus(arith, _) => arith.get_type(ctx),
+            AnalyzedArithmetic::ScalarArrayMinus(_, relation) => relation.get_type(ctx),
+            AnalyzedArithmetic::ArrayMinus(_, relation) => relation.get_type(ctx),
+        }
     }
 }
 
@@ -107,10 +222,16 @@ pub enum AnalyzedRelation {
     GreaterThanEq(Box<AnalyzedRelation>, TermNode),
     Equal(Box<AnalyzedRelation>, TermNode),
     NotEqual(Box<AnalyzedRelation>, TermNode),
+    Cast(Box<AnalyzedRelation>, ValueType),
     Nop(TermNode)
 }
-impl AnalyzeExpression<AnalyzedRelation> for RelationNode {
-    fn analyze_expr(value: AnalyzedRelation, ctx: &mut Context) -> Result<Self, SemanticError> {
+impl AnalyzedRelation {
+    pub fn cast(self, typ: ValueType) -> AnalyzedRelation {
+        AnalyzedRelation::Cast(Box::new(self), typ)
+    }
+}
+impl AnalyzeExpression<RelationNode> for AnalyzedRelation {
+    fn analyze_expr(value: RelationNode, ctx: &mut Context) -> Result<Self, SemanticError> {
         todo!()
     }
     fn get_type(&self, ctx: &Context) -> Result<ValueType, SemanticError> {
@@ -126,8 +247,8 @@ pub enum AnalyzedTerm {
     Divide(Box<TermNode>, AnalyzedFactor),
     Nop(AnalyzedFactor)
 }
-impl AnalyzeExpression<AnalyzedTerm> for TermNode {
-    fn analyze_expr(value: AnalyzedTerm, ctx: &mut Context) -> Result<Self, SemanticError> {
+impl AnalyzeExpression<TermNode> for AnalyzedTerm {
+    fn analyze_expr(value: TermNode, ctx: &mut Context) -> Result<Self, SemanticError> {
         todo!()
     }
 
@@ -149,8 +270,8 @@ pub enum AnalyzedFactor {
     True,
     False
 }
-impl AnalyzeExpression<AnalyzedFactor> for FactorNode {
-    fn analyze_expr(value: AnalyzedFactor, ctx: &mut Context) -> Result<Self, SemanticError> {
+impl AnalyzeExpression<FactorNode> for AnalyzedFactor {
+    fn analyze_expr(value: FactorNode, ctx: &mut Context) -> Result<Self, SemanticError> {
         todo!()
     }
 

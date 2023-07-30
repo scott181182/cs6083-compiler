@@ -1,3 +1,5 @@
+#![feature(box_patterns)]
+
 use std::{env, fs, io};
 use std::path::PathBuf;
 use std::process::exit;
