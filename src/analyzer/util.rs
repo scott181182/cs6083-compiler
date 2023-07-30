@@ -166,22 +166,7 @@ pub trait Analyze<T> {
     fn analyze(self, ctx: &mut Context, scope: &Scope) -> Result<T, SemanticError>;
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum TypeHint {
-    Type(ValueType),
-    Conditional
-}
-impl TypeHint {
-    pub fn unify(self, other: ValueType) -> Result<TypeHint, SemanticError> {
-        match (self, other) {
-            (TypeHint::Type(hint_typ), other_typ) if hint_typ == other_typ => Ok(TypeHint::Type(hint_typ)),
-            (TypeHint::Conditional, ValueType::Integer) => Ok(TypeHint::Type(ValueType::Integer)),
-            (TypeHint::Conditional, ValueType::Boolean) => Ok(TypeHint::Type(ValueType::Boolean)),
-            _ => Err(SemanticError::IncompatableTypes(self, other))
-        }
-    }
-}
-
-pub trait AnalyzeExpression<T> {
-    fn analyze_expr(self, ctx: &mut Context, hint: TypeHint) -> Result<T, SemanticError>;
+pub trait AnalyzeExpression<T>: Sized {
+    fn analyze_expr(value: T, ctx: &mut Context) -> Result<Self, SemanticError>;
+    fn get_type(&self, ctx: &Context) -> Result<ValueType, SemanticError>;
 }

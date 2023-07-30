@@ -2,7 +2,7 @@ use std::num::{ParseIntError, ParseFloatError};
 
 use thiserror::Error;
 
-use super::util::{ValueType, TypeHint};
+use super::util::ValueType;
 
 
 
@@ -38,6 +38,6 @@ pub enum SemanticError {
     MismatchedType(ValueType, ValueType),
     #[error("Expected Integer or Boolean expression for conditional, but found {0:?}")]
     InvalidConditionalExpression(ValueType),
-    #[error("Cannot unify types {0:?} and {1:?}")]
-    IncompatableTypes(TypeHint, ValueType)
+    #[error("Expected {0} type, but found {1:?}")]
+    IncorrectType(String, ValueType),
 }
