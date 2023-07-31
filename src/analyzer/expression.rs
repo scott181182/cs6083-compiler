@@ -1,8 +1,8 @@
 use crate::parser::expression::{ExpressionNode, ArithmeticNode, RelationNode, TermNode, FactorNode};
 use crate::parser::misc::{NameNode, NumberNode};
-use crate::parser::procedure::ProcedureCallNode;
 
 use super::error::SemanticError;
+use super::procedure::AnalyzedProcedureCall;
 use super::util::{AnalyzeExpression, Context, ValueType};
 
 
@@ -216,26 +216,88 @@ impl AnalyzeExpression<ArithmeticNode> for AnalyzedArithmetic {
 
 #[derive(Debug)]
 pub enum AnalyzedRelation {
-    LessThan(Box<AnalyzedRelation>, TermNode),
-    LessThanEq(Box<AnalyzedRelation>, TermNode),
-    GreaterThan(Box<AnalyzedRelation>, TermNode),
-    GreaterThanEq(Box<AnalyzedRelation>, TermNode),
-    Equal(Box<AnalyzedRelation>, TermNode),
-    NotEqual(Box<AnalyzedRelation>, TermNode),
+    LessThan(Box<AnalyzedRelation>, AnalyzedTerm),
+    LessThanEq(Box<AnalyzedRelation>, AnalyzedTerm),
+    GreaterThan(Box<AnalyzedRelation>, AnalyzedTerm),
+    GreaterThanEq(Box<AnalyzedRelation>, AnalyzedTerm),
+    Equal(Box<AnalyzedRelation>, AnalyzedTerm),
+    NotEqual(Box<AnalyzedRelation>, AnalyzedTerm),
     Cast(Box<AnalyzedRelation>, ValueType),
-    Nop(TermNode)
+    Nop(AnalyzedTerm)
 }
 impl AnalyzedRelation {
     pub fn cast(self, typ: ValueType) -> AnalyzedRelation {
         AnalyzedRelation::Cast(Box::new(self), typ)
     }
+
+    pub fn try_compatible(relation: RelationNode, term: TermNode, equality: bool, ctx: &mut Context) -> Result<(AnalyzedRelation, AnalyzedTerm), SemanticError> {
+        let mut relation = AnalyzedRelation::analyze_expr(relation, ctx)?;
+        let mut term = AnalyzedTerm::analyze_expr(term, ctx)?;
+
+        relation = match relation.get_type(ctx)? {
+            ValueType::Integer | ValueType::Float => relation,
+            ValueType::Boolean => relation.cast(ValueType::Integer),
+            ValueType::String if equality => relation,
+            typ => return Err(SemanticError::IncorrectType("relation".to_owned(), typ))
+        };
+        term = match term.get_type(ctx)? {
+            ValueType::Integer | ValueType::Float => term,
+            ValueType::Boolean => term.cast(ValueType::Integer),
+            ValueType::String if equality => term,
+            typ => return Err(SemanticError::IncorrectType("relation".to_owned(), typ))
+        };
+
+        let relation_typ = relation.get_type(ctx)?;
+        let term_typ = term.get_type(ctx)?;
+
+        if relation_typ == term_typ {
+            Ok((relation, term))
+        } else {
+            match (relation_typ, term_typ) {
+                (ValueType::Integer, ValueType::Float) => Ok((relation.cast(ValueType::Float), term)),
+                (ValueType::Float, ValueType::Integer) => Ok((relation, term.cast(ValueType::Float))),
+                (t1, t2) => Err(SemanticError::MismatchedType(t1, t2))
+            }
+        }
+    }
 }
 impl AnalyzeExpression<RelationNode> for AnalyzedRelation {
     fn analyze_expr(value: RelationNode, ctx: &mut Context) -> Result<Self, SemanticError> {
-        todo!()
+        match value {
+            RelationNode::Nop(term) => Ok(AnalyzedRelation::Nop(AnalyzedTerm::analyze_expr(term, ctx)?)),
+
+            RelationNode::Equal(box relation, term) => {
+                let (relation, term) = AnalyzedRelation::try_compatible(relation, term, true, ctx)?;
+                Ok(AnalyzedRelation::Equal(Box::new(relation), term))
+            },
+            RelationNode::NotEqual(box relation, term) => {
+                let (relation, term) = AnalyzedRelation::try_compatible(relation, term, true, ctx)?;
+                Ok(AnalyzedRelation::NotEqual(Box::new(relation), term))
+            },
+            RelationNode::LessThan(box relation, term) => {
+                let (relation, term) = AnalyzedRelation::try_compatible(relation, term, false, ctx)?;
+                Ok(AnalyzedRelation::LessThan(Box::new(relation), term))
+            },
+            RelationNode::LessThanEq(box relation, term) => {
+                let (relation, term) = AnalyzedRelation::try_compatible(relation, term, false, ctx)?;
+                Ok(AnalyzedRelation::LessThanEq(Box::new(relation), term))
+            },
+            RelationNode::GreaterThan(box relation, term) => {
+                let (relation, term) = AnalyzedRelation::try_compatible(relation, term, false, ctx)?;
+                Ok(AnalyzedRelation::GreaterThan(Box::new(relation), term))
+            },
+            RelationNode::GreaterThanEq(box relation, term) => {
+                let (relation, term) = AnalyzedRelation::try_compatible(relation, term, false, ctx)?;
+                Ok(AnalyzedRelation::GreaterThanEq(Box::new(relation), term))
+            }
+        }
     }
     fn get_type(&self, ctx: &Context) -> Result<ValueType, SemanticError> {
-        todo!()
+        match self {
+            AnalyzedRelation::Nop(term) => term.get_type(ctx),
+            AnalyzedRelation::Cast(_, typ) => Ok(typ.clone()),
+            _ => Ok(ValueType::Boolean)
+        }
     }
 }
 
@@ -243,17 +305,132 @@ impl AnalyzeExpression<RelationNode> for AnalyzedRelation {
 
 #[derive(Debug)]
 pub enum AnalyzedTerm {
-    Multiply(Box<TermNode>, AnalyzedFactor),
-    Divide(Box<TermNode>, AnalyzedFactor),
+    Multiply(Box<AnalyzedTerm>, AnalyzedFactor),
+    ArrayScalarMultiply(Box<AnalyzedTerm>, AnalyzedFactor),
+    ScalarArrayMultiply(Box<AnalyzedTerm>, AnalyzedFactor),
+    ArrayMultiply(Box<AnalyzedTerm>, AnalyzedFactor),
+
+    Divide(Box<AnalyzedTerm>, AnalyzedFactor),
+    ArrayScalarDivide(Box<AnalyzedTerm>, AnalyzedFactor),
+    ScalarArrayDivide(Box<AnalyzedTerm>, AnalyzedFactor),
+    ArrayDivide(Box<AnalyzedTerm>, AnalyzedFactor),
+
+    Cast(Box<AnalyzedTerm>, ValueType),
     Nop(AnalyzedFactor)
+}
+impl AnalyzedTerm {
+    pub fn cast(self, typ: ValueType) -> AnalyzedTerm {
+        AnalyzedTerm::Cast(Box::new(self), typ)
+    }
 }
 impl AnalyzeExpression<TermNode> for AnalyzedTerm {
     fn analyze_expr(value: TermNode, ctx: &mut Context) -> Result<Self, SemanticError> {
-        todo!()
+        match value {
+            TermNode::Nop(factor) => Ok(AnalyzedTerm::Nop(AnalyzedFactor::analyze_expr(factor, ctx)?)),
+
+            TermNode::Multiply(term, factor) => {
+                let term = AnalyzedTerm::analyze_expr(*term, ctx)?;
+                let factor = AnalyzedFactor::analyze_expr(factor, ctx)?;
+
+                let term_typ = term.get_type(ctx)?;
+                let factor_typ = factor.get_type(ctx)?;
+                match (term_typ, factor_typ) {
+                    // Non-casting adds
+                    (ValueType::Integer, ValueType::Integer) |
+                    (ValueType::Float, ValueType::Float) =>
+                        Ok(AnalyzedTerm::Multiply(Box::new(term), factor)),
+                    (ValueType::Array(box ValueType::Integer, bound1), ValueType::Array(box ValueType::Integer, bound2)) |
+                    (ValueType::Array(box ValueType::Float, bound1), ValueType::Array(box ValueType::Float, bound2)) if bound1 == bound2 =>
+                        Ok(AnalyzedTerm::ArrayMultiply(Box::new(term), factor)),
+
+                    // Scalar + Scalar w/ Casting
+                    (ValueType::Integer, ValueType::Float) => Ok(AnalyzedTerm::Multiply(Box::new(term.cast(ValueType::Float)), factor)),
+                    (ValueType::Float, ValueType::Integer) => Ok(AnalyzedTerm::Multiply(Box::new(term), factor.cast(ValueType::Float))),
+
+                    // Array + Scalar
+                    (ValueType::Array(box ValueType::Integer, _), ValueType::Integer) =>
+                        Ok(AnalyzedTerm::ArrayScalarMultiply(Box::new(term), factor)),
+                    (ValueType::Array(box ValueType::Integer, _), ValueType::Float) =>
+                        Ok(AnalyzedTerm::ArrayScalarMultiply(Box::new(term), factor.cast(ValueType::Integer))),
+                    (ValueType::Array(box ValueType::Float, _), ValueType::Integer) =>
+                        Ok(AnalyzedTerm::ArrayScalarMultiply(Box::new(term), factor.cast(ValueType::Float))),
+                    (ValueType::Array(box ValueType::Float, _), ValueType::Float) =>
+                        Ok(AnalyzedTerm::ArrayScalarMultiply(Box::new(term), factor)),
+
+                    // Array + Scalar
+                    (ValueType::Integer, ValueType::Array(box ValueType::Integer, _)) =>
+                        Ok(AnalyzedTerm::ScalarArrayMultiply(Box::new(term), factor)),
+                    (ValueType::Float, ValueType::Array(box ValueType::Integer, _)) =>
+                        Ok(AnalyzedTerm::ScalarArrayMultiply(Box::new(term.cast(ValueType::Integer)), factor)),
+                    (ValueType::Integer, ValueType::Array(box ValueType::Float, _)) =>
+                        Ok(AnalyzedTerm::ScalarArrayMultiply(Box::new(term.cast(ValueType::Float)), factor)),
+                    (ValueType::Float, ValueType::Array(box ValueType::Float, _)) =>
+                        Ok(AnalyzedTerm::ScalarArrayMultiply(Box::new(term), factor)),
+
+                    (t1, t2) => Err(SemanticError::MismatchedType(t1, t2))
+                }
+            }
+            
+            TermNode::Divide(term, factor) => {
+                let term = AnalyzedTerm::analyze_expr(*term, ctx)?;
+                let factor = AnalyzedFactor::analyze_expr(factor, ctx)?;
+
+                let term_typ = term.get_type(ctx)?;
+                let factor_typ = factor.get_type(ctx)?;
+                match (term_typ, factor_typ) {
+                    // Non-casting subtractions
+                    (ValueType::Integer, ValueType::Integer) |
+                    (ValueType::Float, ValueType::Float) =>
+                        Ok(AnalyzedTerm::Divide(Box::new(term), factor)),
+                    (ValueType::Array(box ValueType::Integer, bound1), ValueType::Array(box ValueType::Integer, bound2)) |
+                    (ValueType::Array(box ValueType::Float, bound1), ValueType::Array(box ValueType::Float, bound2)) if bound1 == bound2 =>
+                        Ok(AnalyzedTerm::ArrayDivide(Box::new(term), factor)),
+
+                    // Scalar - Scalar w/ Casting
+                    (ValueType::Integer, ValueType::Float) => Ok(AnalyzedTerm::Divide(Box::new(term.cast(ValueType::Float)), factor)),
+                    (ValueType::Float, ValueType::Integer) => Ok(AnalyzedTerm::Divide(Box::new(term), factor.cast(ValueType::Float))),
+
+                    // Array - Scalar
+                    (ValueType::Array(box ValueType::Integer, _), ValueType::Integer) =>
+                        Ok(AnalyzedTerm::ArrayScalarDivide(Box::new(term), factor)),
+                    (ValueType::Array(box ValueType::Integer, _), ValueType::Float) =>
+                        Ok(AnalyzedTerm::ArrayScalarDivide(Box::new(term), factor.cast(ValueType::Integer))),
+                    (ValueType::Array(box ValueType::Float, _), ValueType::Integer) =>
+                        Ok(AnalyzedTerm::ArrayScalarDivide(Box::new(term), factor.cast(ValueType::Float))),
+                    (ValueType::Array(box ValueType::Float, _), ValueType::Float) =>
+                        Ok(AnalyzedTerm::ArrayScalarDivide(Box::new(term), factor)),
+
+                    // Array - Scalar
+                    (ValueType::Integer, ValueType::Array(box ValueType::Integer, _)) =>
+                        Ok(AnalyzedTerm::ScalarArrayDivide(Box::new(term), factor)),
+                    (ValueType::Float, ValueType::Array(box ValueType::Integer, _)) =>
+                        Ok(AnalyzedTerm::ScalarArrayDivide(Box::new(term.cast(ValueType::Integer)), factor)),
+                    (ValueType::Integer, ValueType::Array(box ValueType::Float, _)) =>
+                        Ok(AnalyzedTerm::ScalarArrayDivide(Box::new(term.cast(ValueType::Float)), factor)),
+                    (ValueType::Float, ValueType::Array(box ValueType::Float, _)) =>
+                        Ok(AnalyzedTerm::ScalarArrayDivide(Box::new(term), factor)),
+
+                    (t1, t2) => Err(SemanticError::MismatchedType(t1, t2))
+                }
+            }
+        }
     }
 
     fn get_type(&self, ctx: &Context) -> Result<ValueType, SemanticError> {
-        todo!()
+        match self {
+            AnalyzedTerm::Nop(factor) => factor.get_type(ctx),
+            AnalyzedTerm::Cast(_, typ) => Ok(typ.clone()),
+            
+            AnalyzedTerm::Multiply(_, factor) => factor.get_type(ctx),
+            AnalyzedTerm::ArrayScalarMultiply(term, _) => term.get_type(ctx),
+            AnalyzedTerm::ScalarArrayMultiply(_, factor) => factor.get_type(ctx),
+            AnalyzedTerm::ArrayMultiply(_, factor) => factor.get_type(ctx),
+            
+            AnalyzedTerm::Divide(_, factor) => factor.get_type(ctx),
+            AnalyzedTerm::ArrayScalarDivide(term, _) => term.get_type(ctx),
+            AnalyzedTerm::ScalarArrayDivide(_, factor) => factor.get_type(ctx),
+            AnalyzedTerm::ArrayDivide(_, factor) => factor.get_type(ctx),
+        }
     }
 }
 
@@ -261,21 +438,82 @@ impl AnalyzeExpression<TermNode> for AnalyzedTerm {
 #[derive(Debug)]
 pub enum AnalyzedFactor {
     Paren(Box<AnalyzedExpression>),
-    Call(ProcedureCallNode),
+    Call(AnalyzedProcedureCall),
     Name(NameNode),
     NegateName(NameNode),
-    Number(NumberNode),
-    NegateNumber(NumberNode),
+    Number(AnalyzedNumber),
+    NegateNumber(AnalyzedNumber),
     String(String),
     True,
-    False
+    False,
+
+    Cast(Box<AnalyzedFactor>, ValueType)
+}
+impl AnalyzedFactor {
+    pub fn cast(self, typ: ValueType) -> AnalyzedFactor {
+        AnalyzedFactor::Cast(Box::new(self), typ)
+    }
 }
 impl AnalyzeExpression<FactorNode> for AnalyzedFactor {
     fn analyze_expr(value: FactorNode, ctx: &mut Context) -> Result<Self, SemanticError> {
-        todo!()
+        match value {
+            FactorNode::True => Ok(AnalyzedFactor::True),
+            FactorNode::False => Ok(AnalyzedFactor::False),
+            FactorNode::String(s) => Ok(AnalyzedFactor::String(s)),
+            FactorNode::Number(num) => Ok(AnalyzedFactor::Number(AnalyzedNumber::analyze_expr(num, ctx)?)),
+            FactorNode::NegateNumber(num) =>  Ok(AnalyzedFactor::NegateNumber(AnalyzedNumber::analyze_expr(num, ctx)?)),
+            FactorNode::Name(name) => Ok(AnalyzedFactor::Name(name)),
+            FactorNode::NegateName(name) =>  {
+                let typ = ctx.get_variable_type(&name.ident)?.clone();
+                if matches!(typ, ValueType::Integer | ValueType::Float) {
+                    Ok(AnalyzedFactor::NegateName(name))
+                } else {
+                    Err(SemanticError::IncorrectType("number".to_owned(), typ))
+                }
+            },
+            FactorNode::Paren(box expr) => Ok(AnalyzedFactor::Paren(Box::new(AnalyzedExpression::analyze_expr(expr, ctx)?))),
+            FactorNode::Call(proc) => Ok(AnalyzedFactor::Call(AnalyzedProcedureCall::analyze_expr(proc, ctx)?)),
+        }
     }
 
     fn get_type(&self, ctx: &Context) -> Result<ValueType, SemanticError> {
-        todo!()
+        match self {
+            AnalyzedFactor::True | AnalyzedFactor::False => Ok(ValueType::Boolean),
+            AnalyzedFactor::String(_) => Ok(ValueType::String),
+            AnalyzedFactor::Number(n) |
+            AnalyzedFactor::NegateNumber(n) =>
+                Ok(n.get_type(ctx)?),
+            AnalyzedFactor::Name(name) | 
+            AnalyzedFactor::NegateName(name) =>
+                ctx.get_variable_type(&name.ident).map(ValueType::clone),
+            AnalyzedFactor::Paren(box expr) => expr.get_type(ctx),
+            AnalyzedFactor::Call(proc) => proc.get_type(ctx),
+
+            AnalyzedFactor::Cast(_, typ) => Ok(typ.clone())
+        }
+    }
+}
+
+
+
+#[derive(Debug)]
+pub enum AnalyzedNumber {
+    Integer(i64),
+    Float(f64)
+}
+impl AnalyzeExpression<NumberNode> for AnalyzedNumber {
+    fn analyze_expr(value: NumberNode, _ctx: &mut Context) -> Result<Self, SemanticError> {
+        if value.0.contains(".") {
+            Ok(AnalyzedNumber::Float(value.try_into()?))
+        } else {
+            Ok(AnalyzedNumber::Integer(value.try_into()?))
+        }
+    }
+
+    fn get_type(&self, _ctx: &Context) -> Result<ValueType, SemanticError> {
+        match self {
+            AnalyzedNumber::Integer(_) => Ok(ValueType::Integer),
+            AnalyzedNumber::Float(_) => Ok(ValueType::Float)
+        }
     }
 }

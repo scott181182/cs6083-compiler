@@ -40,4 +40,7 @@ pub enum SemanticError {
     InvalidConditionalExpression(ValueType),
     #[error("Expected {0} type, but found {1:?}")]
     IncorrectType(String, ValueType),
+
+    #[error("Expected {0} arguments, but found {1}")]
+    IncorrectNumberOfArgument(usize, usize)
 }

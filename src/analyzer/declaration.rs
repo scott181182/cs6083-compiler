@@ -11,7 +11,14 @@ impl Analyze<Option<AnalyzedProcedure>> for DeclarationNode {
     fn analyze(self, ctx: &mut Context, scope: &Scope) -> Result<Option<AnalyzedProcedure>, SemanticError> {
         match self {
             DeclarationNode::Variable { global, variable } => {
-                ctx.set_type(scope == &Scope::Global || global, variable.ident, variable.typ.into())?;
+                // println!("{} := {}", variable.ident, variable.typ.into());
+                if let Some(bound) = variable.bound {
+                    let bound = bound.0.try_into()?;
+                    let typ = ValueType::Array(Box::new(variable.typ.into()), bound);
+                    ctx.set_type(scope == &Scope::Global || global, variable.ident, typ)?;
+                } else {
+                    ctx.set_type(scope == &Scope::Global || global, variable.ident, variable.typ.into())?;
+                }
                 Ok(None)
             },
             DeclarationNode::Procedure { global, procedure } => {

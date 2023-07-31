@@ -66,7 +66,7 @@ pub struct NamedValueType(pub String, pub ValueType);
 
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ProcedureSignature(pub Vec<NamedValueType>, pub ValueType);
 
 
@@ -91,6 +91,28 @@ impl ScopeContext {
             ret
         }
     }
+
+    pub fn new_global() -> Self {
+        let mut procedures = HashMap::new();
+        // Builtin Functions
+        procedures.insert("getbool".to_string(), ProcedureSignature(vec![], ValueType::Boolean));
+        procedures.insert("getinteger".to_string(), ProcedureSignature(vec![], ValueType::Integer));
+        procedures.insert("getfloat".to_string(), ProcedureSignature(vec![], ValueType::Float));
+        procedures.insert("getstring".to_string(), ProcedureSignature(vec![], ValueType::String));
+        
+        procedures.insert("putbool".to_string(), ProcedureSignature(vec![NamedValueType("value".to_string(), ValueType::Boolean)], ValueType::Boolean));
+        procedures.insert("putinteger".to_string(), ProcedureSignature(vec![NamedValueType("value".to_string(), ValueType::Integer)], ValueType::Boolean));
+        procedures.insert("putfloat".to_string(), ProcedureSignature(vec![NamedValueType("value".to_string(), ValueType::Float)], ValueType::Boolean));
+        procedures.insert("putstring".to_string(), ProcedureSignature(vec![NamedValueType("value".to_string(), ValueType::String)], ValueType::Boolean));
+        
+        procedures.insert("sqrt".to_string(), ProcedureSignature(vec![NamedValueType("value".to_string(), ValueType::Integer)], ValueType::Float));
+        
+        ScopeContext{
+            variables: HashMap::new(),
+            procedures,
+            ret: ValueType::Void
+        }
+    }
 }
 
 
@@ -104,7 +126,7 @@ pub struct Context {
 impl Context {
     pub fn new() -> Self {
         Context {
-            global_scope: ScopeContext::new(ValueType::Void),
+            global_scope: ScopeContext::new_global(),
             local_scope: ScopeContext::new(ValueType::Void),
             scope_stack: Vec::new()
         }
@@ -134,14 +156,29 @@ impl Context {
 
 
 
-    pub fn get_variable_type(&self, ident: &str) -> Option<&ValueType> {
-        if let Some(var) = self.local_scope.variables.get(ident) {
-            Some(var)
-        } else if let Some(var) = self.global_scope.variables.get(ident) {
-            Some(var)
-        } else {
-            None
-        }
+    pub fn get_variable_type(&self, ident: &str) -> Result<&ValueType, SemanticError> {
+        self.local_scope.variables.get(ident)
+            .or_else(|| self.global_scope.variables.get(ident))
+            .ok_or_else(|| SemanticError::UndeclaredReference(ident.to_string()))
+        // if let Some(var) = self.local_scope.variables.get(ident) {
+        //     Ok(var)
+        // } else if let Some(var) = self.global_scope.variables.get(ident) {
+        //     Ok(var)
+        // } else {
+        //     Err(SemanticError::UndeclaredReference(ident.to_string()))
+        // }
+    }
+    pub fn get_procedure_signature(&self, ident: &str) -> Result<&ProcedureSignature, SemanticError> {
+        self.local_scope.procedures.get(ident)
+            .or_else(|| self.global_scope.procedures.get(ident))
+            .ok_or_else(|| SemanticError::UndeclaredReference(ident.to_string()))
+        // if let Some(var) = self.local_scope.procedures.get(ident) {
+        //     Ok(var)
+        // } else if let Some(var) = self.global_scope.procedures.get(ident) {
+        //     Ok(var)
+        // } else {
+        //     Err(SemanticError::UndeclaredReference(ident.to_string()))
+        // }
     }
     pub fn get_return_type(&self) -> &ValueType { &self.local_scope.ret }
 

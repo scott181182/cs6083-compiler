@@ -75,7 +75,7 @@ fn parse_args() -> Result<(PathBuf, PathBuf), ArgumentError> {
 
 
 fn run_program() -> Result<(), ProgramError> {
-    let (input_path, output_path) = parse_args()?;
+    let (input_path, _output_path) = parse_args()?;
 
     let input_data = fs::read_to_string(&input_path)?;
     let toks = lexer::lex(input_data)?;

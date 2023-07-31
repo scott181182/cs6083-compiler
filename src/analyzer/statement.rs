@@ -53,9 +53,7 @@ pub struct AnalyzedDestination {
 }
 impl Analyze<AnalyzedDestination> for DestinationNode {
     fn analyze(self, ctx: &mut Context, _scope: &Scope) -> Result<AnalyzedDestination, SemanticError> {
-        let typ = ctx.get_variable_type(&self.ident)
-            .ok_or(SemanticError::UndeclaredAssignment(self.ident.clone()))?
-            .clone();
+        let typ = ctx.get_variable_type(&self.ident)?.clone();
         
         if let Some(idx_expr_node) = self.expr {
             if let ValueType::Array(arr_type, _) = typ {

@@ -1,9 +1,10 @@
 use crate::parser::declaration::ProcedureDeclarationNode;
-use crate::parser::procedure::ParameterListNode;
+use crate::parser::procedure::{ParameterListNode, ProcedureCallNode};
 
 use super::error::SemanticError;
+use super::expression::AnalyzedExpression;
 use super::statement::AnalyzedBlock;
-use super::util::{Analyze, Context, ProcedureSignature, Scope, ValueType, NamedValueType, ScopeContext};
+use super::util::{Analyze, Context, ProcedureSignature, Scope, ValueType, NamedValueType, ScopeContext, AnalyzeExpression};
 
 
 
@@ -58,3 +59,39 @@ impl Analyze<AnalyzedProcedure> for ProcedureDeclarationNode {
 }
 
 
+
+#[derive(Debug)]
+pub struct AnalyzedProcedureCall {
+    pub ident: String,
+    pub args: Vec<AnalyzedExpression>,
+    pub ret: ValueType
+}
+impl AnalyzeExpression<ProcedureCallNode> for AnalyzedProcedureCall {
+    fn analyze_expr(value: ProcedureCallNode, ctx: &mut Context) -> Result<Self, SemanticError> {
+        let sig = ctx.get_procedure_signature(&value.ident)?.clone();
+        let ident = value.ident;
+
+        let passed_args = value.arguments.map_or(Vec::new(), |node| node.0);
+
+        if passed_args.len() != sig.0.len() {
+            return Err(SemanticError::IncorrectNumberOfArgument(sig.0.len(), passed_args.len()));
+        }
+        let args = passed_args.into_iter().zip(sig.0.into_iter())
+            .map(move |(parg, sarg)| {
+                let expr = AnalyzedExpression::analyze_expr(parg, ctx)?;
+                let expr_typ = expr.get_type(ctx)?;
+                if expr_typ != sarg.1 {
+                    Err(SemanticError::MismatchedType(expr_typ, sarg.1))
+                } else {
+                    Ok(expr)
+                }
+            })
+            .collect::<Result<Vec<AnalyzedExpression>, SemanticError>>()?;
+
+        Ok(AnalyzedProcedureCall { ident, args, ret: sig.1 })
+    }
+
+    fn get_type(&self, _ctx: &Context) -> Result<ValueType, SemanticError> {
+        Ok(self.ret.clone())
+    }
+}
