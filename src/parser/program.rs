@@ -15,7 +15,7 @@ impl ParseTokens for ProgramNode {
     fn parse(toks: &mut TokenStream) -> Result<Self, ParserError> {
         let header = ProgramHeaderNode::parse(toks)?;
         let body = ProgramBodyNode::parse(toks)?;
-        toks.consume_expected(Token::Period)?;
+        toks.consume_expected(Token::Period).unwrap_or_else(|_| println!("[warning] program does not have terminating period"));
 
         if let Some(next) = toks.pop_front() {
             return Err(ParserError::ExpectedEndOfFile(next))
