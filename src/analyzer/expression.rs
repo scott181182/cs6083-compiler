@@ -439,8 +439,8 @@ impl AnalyzeExpression<TermNode> for AnalyzedTerm {
 pub enum AnalyzedFactor {
     Paren(Box<AnalyzedExpression>),
     Call(AnalyzedProcedureCall),
-    Name(NameNode),
-    NegateName(NameNode),
+    Name(AnalyzedName),
+    NegateName(AnalyzedName),
     Number(AnalyzedNumber),
     NegateNumber(AnalyzedNumber),
     String(String),
@@ -462,9 +462,11 @@ impl AnalyzeExpression<FactorNode> for AnalyzedFactor {
             FactorNode::String(s) => Ok(AnalyzedFactor::String(s)),
             FactorNode::Number(num) => Ok(AnalyzedFactor::Number(AnalyzedNumber::analyze_expr(num, ctx)?)),
             FactorNode::NegateNumber(num) =>  Ok(AnalyzedFactor::NegateNumber(AnalyzedNumber::analyze_expr(num, ctx)?)),
-            FactorNode::Name(name) => Ok(AnalyzedFactor::Name(name)),
+
+            FactorNode::Name(name) => Ok(AnalyzedFactor::Name(AnalyzedName::analyze_expr(name, ctx)?)),
             FactorNode::NegateName(name) =>  {
-                let typ = ctx.get_variable_type(&name.ident)?.clone();
+                let name = AnalyzedName::analyze_expr(name, ctx)?;
+                let typ = name.get_type(ctx)?.clone();
                 if matches!(typ, ValueType::Integer | ValueType::Float) {
                     Ok(AnalyzedFactor::NegateName(name))
                 } else {
@@ -480,12 +482,12 @@ impl AnalyzeExpression<FactorNode> for AnalyzedFactor {
         match self {
             AnalyzedFactor::True | AnalyzedFactor::False => Ok(ValueType::Boolean),
             AnalyzedFactor::String(_) => Ok(ValueType::String),
-            AnalyzedFactor::Number(n) |
-            AnalyzedFactor::NegateNumber(n) =>
-                Ok(n.get_type(ctx)?),
+            AnalyzedFactor::Number(num) |
+            AnalyzedFactor::NegateNumber(num) =>
+                num.get_type(ctx),
             AnalyzedFactor::Name(name) | 
             AnalyzedFactor::NegateName(name) =>
-                ctx.get_variable_type(&name.ident).map(ValueType::clone),
+                name.get_type(ctx),
             AnalyzedFactor::Paren(box expr) => expr.get_type(ctx),
             AnalyzedFactor::Call(proc) => proc.get_type(ctx),
 
@@ -514,6 +516,42 @@ impl AnalyzeExpression<NumberNode> for AnalyzedNumber {
         match self {
             AnalyzedNumber::Integer(_) => Ok(ValueType::Integer),
             AnalyzedNumber::Float(_) => Ok(ValueType::Float)
+        }
+    }
+}
+
+
+#[derive(Debug)]
+pub enum AnalyzedName {
+    Name(String),
+    Indexed(String, Box<AnalyzedExpression>)
+}
+impl AnalyzeExpression<NameNode> for AnalyzedName {
+    fn analyze_expr(value: NameNode, ctx: &mut Context) -> Result<Self, SemanticError> {
+        if let Some(box expr) = value.expr {
+            let expr = AnalyzedExpression::analyze_expr(expr, ctx)?;
+            let expr_typ = expr.get_type(ctx)?;
+            if expr_typ != ValueType::Integer {
+                Err(SemanticError::NonIntegerIndex(value.ident, expr_typ))
+            } else {
+                Ok(AnalyzedName::Indexed(value.ident, Box::new(expr)))
+            }
+        } else {
+            Ok(AnalyzedName::Name(value.ident))
+        }
+    }
+
+    fn get_type(&self, ctx: &Context) -> Result<ValueType, SemanticError> {
+        match self {
+            AnalyzedName::Name(ident) => ctx.get_variable_type(ident).map(ValueType::clone),
+            AnalyzedName::Indexed(ident, _) => {
+                let arr_typ = ctx.get_variable_type(ident)?;
+                if let ValueType::Array(box val_typ, _) = arr_typ {
+                    Ok(val_typ.clone())
+                } else {
+                    Err(SemanticError::IndexOnNonArray(ident.to_owned()))
+                }
+            }
         }
     }
 }
