@@ -38,3 +38,24 @@ impl AnalyzedProgram {
         Ok(AnalyzedProgram { name, declarations: ctx.into_global(), procedures, block })
     }
 }
+
+
+#[cfg(test)]
+use rstest::rstest;
+#[cfg(test)]
+use std::path::PathBuf;
+
+#[cfg(test)]
+#[rstest]
+fn compile_test_correct(
+    #[files("test_programs/correct/*.src")] source_file: PathBuf,
+) -> Result<(), crate::ProgramError> {
+    let input_data = std::fs::read_to_string(&source_file)?;
+    let toks = crate::lexer::lex(input_data)?;
+    // println!("{:?}", toks);
+    let program = crate::parser::parse(toks)?;
+    let analyzed_program = AnalyzedProgram::analyze(program)?;
+    println!("{:?}", analyzed_program);
+
+    Ok(())
+}
