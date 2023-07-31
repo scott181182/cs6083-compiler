@@ -3,5 +3,8 @@
         "analyzer",
         "lexer",
         "parser",
+        "test",
+        "cicd",
+        "env"
     ]
 }
