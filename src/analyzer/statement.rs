@@ -144,10 +144,15 @@ impl Analyze<AnalyzedReturn> for ReturnStatementNode {
             return Err(SemanticError::UnexpectedReturn)
         }
         
-        let expr = AnalyzedExpression::analyze_expr(self.0, ctx)?;
+        let mut expr = AnalyzedExpression::analyze_expr(self.0, ctx)?;
         let expr_typ = expr.get_type(ctx)?;
         if expected_ret != expr_typ {
-            return Err(SemanticError::MismatchedType(expected_ret, expr_typ))
+            expr = match (expected_ret, expr_typ) {
+                (ValueType::Integer, ValueType::Boolean | ValueType::Float) => expr.cast(ValueType::Integer),
+                (ValueType::Boolean, ValueType::Integer) => expr.cast(ValueType::Boolean),
+                (ValueType::Float, ValueType::Integer) => expr.cast(ValueType::Float),
+                (dest_typ, expr_typ) => return Err(SemanticError::MismatchedType(dest_typ, expr_typ))
+            };
         }
 
         Ok(AnalyzedReturn { expr })
