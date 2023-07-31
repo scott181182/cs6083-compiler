@@ -250,3 +250,21 @@ pub fn lex(raw_content: String) -> Result<VecDeque<Token>, LexerError> {
 
     Ok(toks)
 }
+
+
+
+
+#[cfg(test)]
+mod tests {
+    use super::LexerError;
+
+    #[test]
+    fn incorrect_test2() -> Result<(), crate::ProgramError> {
+        let input_data = std::fs::read_to_string("test_programs/incorrect/test2.src")?;
+        match crate::lexer::lex(input_data) {
+            Ok(_) => panic!("Expected incorrect test1 to error, but it succeeded"),
+            Err(LexerError::UnknownSymbol(sym)) if sym == "#s" => Ok(()),
+            _ => panic!("Incorrect test1 failed, but in an unexpected way")
+        }
+    }
+}
