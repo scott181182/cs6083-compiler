@@ -23,7 +23,6 @@ impl ParseTokens for DeclarationNode {
         }
     }
 }
-
 #[derive(Debug)]
 pub struct ProcedureDeclarationNode {
     pub header: ProcedureHeaderNode,

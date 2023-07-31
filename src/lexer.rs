@@ -70,6 +70,7 @@ pub enum Token {
 
 impl Token {
     pub fn from_identifier(value: String) -> Self {
+        let value = value.to_lowercase();
         match value.as_str() {
             "program" => Token::Program,
             "is" => Token::Is,
@@ -90,6 +91,7 @@ impl Token {
             "not" => Token::Not,
             "true" => Token::True,
             "false" => Token::False,
+            // Identifiers a case-insensitive, so lowercase!
             _ => Token::Identifier(value)
         }
     }
@@ -184,7 +186,7 @@ pub fn lex(raw_content: String) -> Result<VecDeque<Token>, LexerError> {
                 PartialToken::try_from(c)?
             },
 
-            (PartialToken::NumberLiteral(mut p), cin) if cin.is_numeric() => {
+            (PartialToken::NumberLiteral(mut p), cin) if cin.is_numeric() || cin == '_' => {
                 p.push(cin);
                 PartialToken::NumberLiteral(p)
             },
@@ -247,4 +249,22 @@ pub fn lex(raw_content: String) -> Result<VecDeque<Token>, LexerError> {
     }
 
     Ok(toks)
+}
+
+
+
+
+#[cfg(test)]
+mod tests {
+    use super::LexerError;
+
+    #[test]
+    fn incorrect_test2() -> Result<(), crate::ProgramError> {
+        let input_data = std::fs::read_to_string("test_programs/incorrect/test2.src")?;
+        match crate::lexer::lex(input_data) {
+            Ok(_) => panic!("Expected incorrect test1 to error, but it succeeded"),
+            Err(LexerError::UnknownSymbol(sym)) if sym == "#s" => Ok(()),
+            _ => panic!("Incorrect test1 failed, but in an unexpected way")
+        }
+    }
 }

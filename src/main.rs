@@ -1,3 +1,5 @@
+#![feature(box_patterns)]
+
 use std::{env, fs, io};
 use std::path::PathBuf;
 use std::process::exit;
@@ -5,10 +7,13 @@ use std::process::exit;
 use parser::parse;
 use thiserror::Error;
 
+use crate::analyzer::AnalyzedProgram;
+
 
 
 mod lexer;
 mod parser;
+mod analyzer;
 
 
 
@@ -21,7 +26,9 @@ enum ProgramError {
     #[error(transparent)]
     Lexer(#[from] lexer::LexerError),
     #[error(transparent)]
-    Parser(#[from] parser::ParserError)
+    Parser(#[from] parser::ParserError),
+    #[error(transparent)]
+    Semantic(#[from] analyzer::error::SemanticError)
 }
 
 #[derive(Error, Debug)]
@@ -68,13 +75,14 @@ fn parse_args() -> Result<(PathBuf, PathBuf), ArgumentError> {
 
 
 fn run_program() -> Result<(), ProgramError> {
-    let (input_path, output_path) = parse_args()?;
+    let (input_path, _output_path) = parse_args()?;
 
     let input_data = fs::read_to_string(&input_path)?;
     let toks = lexer::lex(input_data)?;
     // println!("{:?}", toks);
     let program = parse(toks)?;
-    println!("{:?}", program);
+    let analyzed_program = AnalyzedProgram::analyze(program)?;
+    println!("{:?}", analyzed_program);
 
     Ok(())
 }
