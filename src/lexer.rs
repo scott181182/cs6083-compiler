@@ -70,6 +70,7 @@ pub enum Token {
 
 impl Token {
     pub fn from_identifier(value: String) -> Self {
+        let value = value.to_lowercase();
         match value.as_str() {
             "program" => Token::Program,
             "is" => Token::Is,
@@ -91,7 +92,7 @@ impl Token {
             "true" => Token::True,
             "false" => Token::False,
             // Identifiers a case-insensitive, so lowercase!
-            _ => Token::Identifier(value.to_lowercase())
+            _ => Token::Identifier(value)
         }
     }
 
