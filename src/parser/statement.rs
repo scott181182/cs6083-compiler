@@ -98,7 +98,6 @@ impl ParseTokens for IfStatementNode {
         let has_else = toks.consume_if(&Token::Else);
         // Parse else body
         if has_else {
-            toks.pop_front();
             while StatementNode::can_parse(toks) {
                 else_block.push(StatementNode::parse(toks)?);
                 toks.consume_expected(Token::Semicolon)?;
